@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { initializeMockData } from '../services/storageService';
 
 const groups = [
   {
@@ -53,9 +54,28 @@ const groups = [
 ];
 
 export default function AllPages() {
+
+  const handleReseed = () => {
+    try {
+      initializeMockData();
+      // Give the browser a moment to write to localStorage, then reload
+      setTimeout(() => window.location.reload(), 200);
+    } catch (err) {
+      console.error('Failed to initialize mock data:', err);
+      alert('Failed to initialize mock data. See console for details.');
+    }
+  };
+
   return (
     <div style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 28, marginBottom: 12 }}>CyberNEX — Pages Index</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h1 style={{ fontSize: 28 }}>CyberNEX — Pages Index</h1>
+        <div>
+          <button onClick={handleReseed} style={{ marginLeft: 12, padding: '8px 12px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff' }}>
+            Reseed Mock Data
+          </button>
+        </div>
+      </div>
       <p style={{ marginBottom: 18 }}>Quick links to pages for QA. Some routes require authentication — use the login page first.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
         {groups.map(group => (

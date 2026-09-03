@@ -28,6 +28,7 @@ import SearchResults from './pages/shared/SearchResults';
 import StudentDashboard from './pages/student/Dashboard';
 import Learning from './pages/student/Learning';
 import LearningDetail from './pages/student/LearningDetail';
+import Roadmap from './pages/student/Roadmap';
 import PracticeLabs from './pages/student/PracticeLabs';
 import PracticeLabDetail from './pages/student/PracticeLabDetail';
 import StudentAssessments from './pages/student/Assessments';
@@ -116,6 +117,8 @@ function App() {
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
                 <Route path="/student/learning" element={<Learning />} />
                 <Route path="/student/learning/:courseId" element={<LearningDetail />} />
+                <Route path="/student/roadmap" element={<Roadmap />} />
+                <Route path="/student/roadmap/:pathId" element={<Roadmap />} />
                 <Route path="/student/practice" element={<PracticeLabs />} />
                 <Route path="/student/practice/:labId" element={<PracticeLabDetail />} />
                 <Route path="/student/assessments" element={<StudentAssessments />} />

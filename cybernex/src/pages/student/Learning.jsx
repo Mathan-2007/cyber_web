@@ -133,13 +133,27 @@ const Learning = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">Cyber Atlas</p>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Your guided security road map</h1>
-          <p className="mt-1 text-sm text-gray-400">Learn a topic, validate it in a practice room, then prove it in an assessment lab.</p>
-        </div>
-      </div>
+<div className="flex justify-between items-center">
+  <div>
+    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
+      Cyber Atlas
+    </p>
+
+    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+      Your guided security road map
+    </h1>
+
+    <p className="mt-1 text-sm text-gray-400">
+      Learn a topic, validate it in a practice room, then prove it in an assessment lab.
+    </p>
+  </div>
+
+  <Link to="/student/roadmap">
+    <button className="px-4 py-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 transition-colors">
+      Road Map
+    </button>
+  </Link>
+</div>
 
       <Card className="overflow-hidden border-cyan-500/20 bg-slate-900">
         <div className="mb-4 flex items-center justify-between gap-4">

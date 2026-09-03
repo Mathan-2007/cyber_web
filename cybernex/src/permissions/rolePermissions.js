@@ -6,15 +6,21 @@
  */
 
 import { ROLES } from '../utils/constants';
-import { ALL_PERMISSIONS } from './permissions';
+import { ALL_PERMISSIONS, USER_PERMISSIONS } from './permissions';
 
 // ===== DEFAULT PERMISSIONS BY ROLE =====
 
 /**
- * Admin has ALL permissions by default
- * Cannot be overridden to have fewer permissions than this
+ * Admin limited default permissions
+ * Per request, admins are limited to core user management (add/remove/edit/change role)
  */
-export const ADMIN_DEFAULT_PERMISSIONS = Object.values(ALL_PERMISSIONS);
+export const ADMIN_DEFAULT_PERMISSIONS = [
+  USER_PERMISSIONS.VIEW,
+  USER_PERMISSIONS.CREATE,
+  USER_PERMISSIONS.EDIT,
+  USER_PERMISSIONS.DELETE,
+  USER_PERMISSIONS.CHANGE_ROLE,
+];
 
 /**
  * Faculty default permissions
