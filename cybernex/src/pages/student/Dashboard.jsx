@@ -204,7 +204,7 @@ const StudentDashboard = () => {
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Progress Overview */}
-        <div>
+        <div className="space-y-6">
           <Card>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Learning Progress</h3>
             
@@ -285,12 +285,8 @@ const StudentDashboard = () => {
               />
             </div>
           </Card>
-        </div>
 
-        {/* Recent Activity & Recommendations */}
-        <div className="space-y-6">
-          {/* Recent Activity */}
-          <Card>
+           <Card>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Activity</h3>
               <Link to="/student/progress">
@@ -342,7 +338,13 @@ const StudentDashboard = () => {
                 </div>
               )}
             </div>
-          </Card>
+          </Card>          
+        </div>
+
+        {/* Recent Activity & Recommendations */}
+        <div className="space-y-6">
+          {/* Recent Activity */}
+         
 
           {/* Recommended For You */}
           <Card>
@@ -399,88 +401,6 @@ const StudentDashboard = () => {
           </Card>
         </div>
       </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          <Link to="/student/learning">
-            <Button variant="outline" className="w-full justify-start" startIcon={<BookOpen size={16} />}>
-              My Courses
-            </Button>
-          </Link>
-          <Link to="/student/practice">
-            <Button variant="outline" className="w-full justify-start" startIcon={<ShieldCheck size={16} />}>
-              Practice Labs
-            </Button>
-          </Link>
-          <Link to="/student/assessments">
-            <Button variant="outline" className="w-full justify-start" startIcon={<BarChart3 size={16} />}>
-              Assessments
-            </Button>
-          </Link>
-          <Link to="/student/progress">
-            <Button variant="outline" className="w-full justify-start" startIcon={<TrendingUp size={16} />}>
-              My Progress
-            </Button>
-          </Link>
-          <Link to="/student/results">
-            <Button variant="outline" className="w-full justify-start" startIcon={<Award size={16} />}>
-              Results
-            </Button>
-          </Link>
-          <Link to="/student/schedule">
-            <Button variant="outline" className="w-full justify-start" startIcon={<Calendar size={16} />}>
-              Schedule
-            </Button>
-          </Link>
-        </div>
-      </Card>
-
-      {/* Upcoming Assessments */}
-      <Card>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Upcoming Assessments</h3>
-          <Link to="/student/assessments">
-            <Button variant="ghost" size="sm" endIcon={<ArrowRight size={14} />}>
-              View All
-            </Button>
-          </Link>
-        </div>
-        
-        <div className="space-y-3">
-          {filteredAssessments
-            .filter(assessment => new Date(assessment.dueDate || assessment.endDate) > new Date())
-            .slice(0, 3)
-            .map(assessment => (
-              <div key={assessment.id} className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div className="flex-shrink-0">
-                  <BarChart3 size={24} className="text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900 dark:text-white">{assessment.title}</h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    Due: {new Date(assessment.dueDate || assessment.endDate).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex-shrink-0">
-                  <Link to={`/student/assessment/${assessment.id}`}>
-                    <Button variant="primary" size="sm">
-                      View Details
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
-          
-          {filteredAssessments.filter(assessment => new Date(assessment.dueDate || assessment.endDate) > new Date()).length === 0 && (
-            <div className="text-center py-8 text-gray-600 dark:text-gray-300">
-              <p>No upcoming assessments</p>
-              <p className="text-sm mt-1">Check back later for new assessments</p>
-            </div>
-          )}
-        </div>
-      </Card>
     </div>
   );
 };

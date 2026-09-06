@@ -28,6 +28,7 @@ const Button = ({
   type = 'button',
   startIcon,
   endIcon,
+  as: Component = 'button',
   ...props
 }) => {
   const { isDarkMode } = useTheme();
@@ -86,10 +87,10 @@ const Button = ({
   );
 
   return (
-    <button
-      type={type}
+    <Component
+      type={Component === 'button' ? type : undefined}
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
-      disabled={disabled || isLoading}
+      disabled={Component === 'button' ? disabled || isLoading : undefined}
       onClick={onClick}
       {...props}
     >
@@ -105,7 +106,7 @@ const Button = ({
           {endIcon && <span className="ml-2">{endIcon}</span>}
         </>
       )}
-    </button>
+    </Component>
   );
 };
 

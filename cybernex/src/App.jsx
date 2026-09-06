@@ -28,6 +28,7 @@ import SearchResults from './pages/shared/SearchResults';
 import StudentDashboard from './pages/student/Dashboard';
 import Learning from './pages/student/Learning';
 import LearningDetail from './pages/student/LearningDetail';
+import LearningLesson from './pages/student/LearningLesson';
 import Roadmap from './pages/student/Roadmap';
 import PracticeLabs from './pages/student/PracticeLabs';
 import PracticeLabDetail from './pages/student/PracticeLabDetail';
@@ -78,6 +79,7 @@ import BackupForm from './pages/admin/BackupForm';
 import AccessControl from './pages/admin/AccessControl';
 import AuditLogs from './pages/admin/AuditLogs';
 import AdminSettings from './pages/admin/Settings';
+import AssessmentControl from './pages/admin/AssessmentControl';
 
 const HomeRedirect = () => {
   const { isLoading, isAuthenticated, user } = useAuth();
@@ -116,6 +118,7 @@ function App() {
               <Route element={<StudentLayout />}>
                 <Route path="/student/dashboard" element={<StudentDashboard />} />
                 <Route path="/student/learning" element={<Learning />} />
+                <Route path="/student/learning/:courseId/:lessonId" element={<LearningLesson />} />
                 <Route path="/student/learning/:courseId" element={<LearningDetail />} />
                 <Route path="/student/roadmap" element={<Roadmap />} />
                 <Route path="/student/roadmap/:pathId" element={<Roadmap />} />
@@ -185,6 +188,7 @@ function App() {
                 <Route path="/admin/backups/new" element={<BackupForm />} />
                 <Route path="/admin/backups/:backupId/restore" element={<BackupForm />} />
                 <Route path="/admin/access-control" element={<AccessControl />} />
+                <Route path="/admin/assessment-control" element={<AssessmentControl />} />
                 <Route path="/admin/audit-logs" element={<AuditLogs />} />
                 <Route path="/admin/settings" element={<AdminSettings />} />
                 <Route path="/admin/notifications" element={<Notifications />} />

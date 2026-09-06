@@ -37,28 +37,19 @@ export const getCourseProgress = (course, lessons = [], user) => {
 
 /**
  * Compute a single topic node's { state, progress, comingSoon, primaryCourseId }.
- * `unlocked` should be pre-computed by the caller based on sequence position.
+ * All topics are intentionally open in the prototype so the roadmap behaves as a
+ * guided overview rather than a locked progression wall.
  */
 export const getTopicStatus = (topic, { courses = [], lessons = [], user, unlocked = true }) => {
   const linkedCourses = resolveCourses(topic, courses);
 
   if (linkedCourses.length === 0) {
     return {
-      state: unlocked ? ROADMAP_STATES.AVAILABLE : ROADMAP_STATES.LOCKED,
+      state: ROADMAP_STATES.AVAILABLE,
       progress: 0,
       comingSoon: true,
       primaryCourseId: null,
-      cleared: true, // nothing to complete, doesn't block sequencing
-    };
-  }
-
-  if (!unlocked) {
-    return {
-      state: ROADMAP_STATES.LOCKED,
-      progress: 0,
-      comingSoon: false,
-      primaryCourseId: linkedCourses[0].id,
-      cleared: false,
+      cleared: true,
     };
   }
 
@@ -83,18 +74,13 @@ export const getTopicStatus = (topic, { courses = [], lessons = [], user, unlock
 };
 
 /**
- * Compute status for an ordered list of topics, applying sequential
- * unlocking: a topic is unlocked once the previous topic is "cleared"
- * (completed, or comingSoon since there's nothing to complete there).
- * The first topic in any list is always unlocked.
+ * Compute status for an ordered list of topics without applying any hard lock logic.
  */
 export const getTopicListStatus = (topics = [], ctx) => {
-  let previousCleared = true;
-  return topics.map((topic) => {
-    const status = getTopicStatus(topic, { ...ctx, unlocked: previousCleared });
-    previousCleared = status.cleared;
-    return { ...topic, ...status };
-  });
+  return topics.map((topic) => ({
+    ...topic,
+    ...getTopicStatus(topic, { ...ctx, unlocked: true }),
+  }));
 };
 
 /**
@@ -109,9 +95,7 @@ export const getOverallProgress = (topicsWithStatus = []) => {
 };
 
 /**
- * Find the best "Continue learning" target across all topic lists: the
- * first in-progress topic, else the first available (started) topic with a
- * real course. Returns null when nothing actionable exists yet.
+ * Find the best "Continue learning" target across all topic lists.
  */
 export const findContinueTarget = (allListsWithStatus = []) => {
   for (const { topics } of allListsWithStatus) {

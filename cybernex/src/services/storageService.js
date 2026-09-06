@@ -30,6 +30,7 @@ import {
   PERMISSIONS
 } from '../utils/constants';
 import { ADMIN_DEFAULT_PERMISSIONS, FACULTY_DEFAULT_PERMISSIONS, STUDENT_DEFAULT_PERMISSIONS } from '../permissions/rolePermissions';
+import { apiRequest, getAuthToken } from './api';
 
 // ===== STORAGE KEYS =====
 const STORAGE_PREFIX = 'cybernex_';
@@ -62,6 +63,9 @@ export const STORAGE_KEYS = {
   PERMISSIONS: `${STORAGE_PREFIX}permissions`,
   ASSESSMENT_UNLOCKS: `${STORAGE_PREFIX}assessment_unlocks`,
   STUDENT_PROGRESS: `${STORAGE_PREFIX}student_progress`,
+  ASSESSMENT_GLOBAL_POLICY: `${STORAGE_PREFIX}assessment_global_policy`,
+  ASSESSMENT_SESSIONS: `${STORAGE_PREFIX}assessment_sessions`,
+  ASSESSMENT_QUESTION_SELECTIONS: `${STORAGE_PREFIX}assessment_question_selections`,
 
   // State
   LAST_ACTIVITY: `${STORAGE_PREFIX}last_activity`,
@@ -115,6 +119,20 @@ export const removeItem = (key) => {
   }
 };
 
+const persistToBackend = async (endpoint, method, payload) => {
+  if (!getAuthToken()) return null;
+
+  try {
+    return await apiRequest(endpoint, {
+      method,
+      ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
+    });
+  } catch (error) {
+    console.warn(`Backend sync failed for ${endpoint}:`, error.message);
+    return null;
+  }
+};
+
 /**
  * Clear all application data from localStorage
  */
@@ -133,6 +151,25 @@ export const clearAll = () => {
 /**
  * Initialize mock data if not present
  */
+const mergeSeedData = (existing = [], seed = []) => {
+  const byId = new Map((existing || []).filter(item => item && item.id).map(item => [item.id, item]));
+  const merged = [...(existing || [])];
+
+  seed.forEach(item => {
+    if (byId.has(item.id)) {
+      const index = merged.findIndex(entry => entry.id === item.id);
+      if (index >= 0) {
+        merged[index] = { ...merged[index], ...item };
+      }
+      return;
+    }
+
+    merged.push(item);
+  });
+
+  return merged;
+};
+
 export const initializeMockData = () => {
   // Check if data is already initialized
   const currentVersion = getItem(STORAGE_KEYS.APP_VERSION);
@@ -143,8 +180,12 @@ export const initializeMockData = () => {
 
   console.log('Initializing mock data...');
 
+  const existingUsers = getItem(STORAGE_KEYS.USERS, []);
+  const existingCourses = getItem(STORAGE_KEYS.COURSES, []);
+  const existingLabs = getItem(STORAGE_KEYS.LABS, []);
+
   // Initialize users
-  if (!getItem(STORAGE_KEYS.USERS)) {
+  if (!existingUsers.length) {
     const users = SAMPLE_USERS.map(user => ({
       ...user,
       // Add custom permissions if they exist
@@ -155,6 +196,16 @@ export const initializeMockData = () => {
           : STUDENT_DEFAULT_PERMISSIONS
     }));
     setItem(STORAGE_KEYS.USERS, users);
+  } else {
+    const mergedUsers = mergeSeedData(existingUsers, SAMPLE_USERS.map(user => ({
+      ...user,
+      permissions: user.role === ROLES.ADMIN
+        ? ADMIN_DEFAULT_PERMISSIONS
+        : user.role === ROLES.FACULTY
+          ? FACULTY_DEFAULT_PERMISSIONS
+          : STUDENT_DEFAULT_PERMISSIONS
+    })));
+    setItem(STORAGE_KEYS.USERS, mergedUsers);
   }
 
   // Keep the documented demo accounts usable after an app update while
@@ -178,15 +229,14 @@ export const initializeMockData = () => {
     setItem(STORAGE_KEYS.STUDENT_GROUPS, SAMPLE_STUDENT_GROUPS);
   }
 
-  // Initialize courses
-  if (!getItem(STORAGE_KEYS.COURSES)) {
-    setItem(STORAGE_KEYS.COURSES, SAMPLE_COURSES);
-  }
+  // Initialize courses, merging any newer built-in content so students get
+  // fresh learning modules without losing locally created records.
+  const mergedCourses = mergeSeedData(existingCourses, SAMPLE_COURSES);
+  setItem(STORAGE_KEYS.COURSES, mergedCourses);
 
-  // Initialize labs
-  if (!getItem(STORAGE_KEYS.LABS)) {
-    setItem(STORAGE_KEYS.LABS, SAMPLE_LABS);
-  }
+  // Initialize labs, merging any newer built-in labs so practice data stays up to date.
+  const mergedLabs = mergeSeedData(existingLabs, SAMPLE_LABS);
+  setItem(STORAGE_KEYS.LABS, mergedLabs);
 
   // Initialize assessments
   if (!getItem(STORAGE_KEYS.ASSESSMENTS)) {
@@ -303,20 +353,34 @@ export const initializeMockData = () => {
 // Users
 export const getUsers = () => getItem(STORAGE_KEYS.USERS, []);
 export const setUsers = (users) => setItem(STORAGE_KEYS.USERS, users);
-export const addUser = (user) => {
+export const addUser = async (user) => {
+  const apiResult = await persistToBackend('/users', 'POST', user);
+  if (apiResult?.user) {
+    const users = getUsers();
+    setUsers([...users, apiResult.user]);
+    return apiResult.user;
+  }
+
   const users = getUsers();
   setUsers([...users, user]);
   return user;
 };
-export const updateUser = (userId, updates) => {
+export const updateUser = async (userId, updates) => {
+  const apiResult = await persistToBackend(`/users/${userId}`, 'PUT', updates);
   const users = getUsers();
   const updatedUsers = users.map(user =>
     user.id === userId ? { ...user, ...updates } : user
   );
   setUsers(updatedUsers);
-  return updatedUsers.find(user => user.id === userId);
+  const currentUser = updatedUsers.find(user => user.id === userId);
+
+  if (apiResult && currentUser) {
+    return currentUser;
+  }
+  return currentUser;
 };
-export const deleteUser = (userId) => {
+export const deleteUser = async (userId) => {
+  await persistToBackend(`/users/${userId}`, 'DELETE');
   const users = getUsers();
   const filteredUsers = users.filter(user => user.id !== userId);
   setUsers(filteredUsers);
@@ -326,12 +390,20 @@ export const deleteUser = (userId) => {
 // Courses
 export const getCourses = () => getItem(STORAGE_KEYS.COURSES, []);
 export const setCourses = (courses) => setItem(STORAGE_KEYS.COURSES, courses);
-export const addCourse = (course) => {
+export const addCourse = async (course) => {
+  const apiResult = await persistToBackend('/courses', 'POST', course);
+  if (apiResult?.id) {
+    const courses = getCourses();
+    setCourses([...courses, { ...course, id: course.id || apiResult.id }]);
+    return { ...course, id: course.id || apiResult.id };
+  }
+
   const courses = getCourses();
   setCourses([...courses, course]);
   return course;
 };
-export const updateCourse = (courseId, updates) => {
+export const updateCourse = async (courseId, updates) => {
+  await persistToBackend(`/courses/${courseId}`, 'PUT', updates);
   const courses = getCourses();
   const updatedCourses = courses.map(course =>
     course.id === courseId ? { ...course, ...updates } : course
@@ -339,7 +411,8 @@ export const updateCourse = (courseId, updates) => {
   setCourses(updatedCourses);
   return updatedCourses.find(course => course.id === courseId);
 };
-export const deleteCourse = (courseId) => {
+export const deleteCourse = async (courseId) => {
+  await persistToBackend(`/courses/${courseId}`, 'DELETE');
   const courses = getCourses();
   const filteredCourses = courses.filter(course => course.id !== courseId);
   setCourses(filteredCourses);
@@ -356,12 +429,20 @@ export const getLessons = () => {
 // Labs
 export const getLabs = () => getItem(STORAGE_KEYS.LABS, []);
 export const setLabs = (labs) => setItem(STORAGE_KEYS.LABS, labs);
-export const addLab = (lab) => {
+export const addLab = async (lab) => {
+  const apiResult = await persistToBackend('/labs', 'POST', lab);
+  if (apiResult?.id) {
+    const labs = getLabs();
+    setLabs([...labs, { ...lab, id: lab.id || apiResult.id }]);
+    return { ...lab, id: lab.id || apiResult.id };
+  }
+
   const labs = getLabs();
   setLabs([...labs, lab]);
   return lab;
 };
-export const updateLab = (labId, updates) => {
+export const updateLab = async (labId, updates) => {
+  await persistToBackend(`/labs/${labId}`, 'PUT', updates);
   const labs = getLabs();
   const updatedLabs = labs.map(lab =>
     lab.id === labId ? { ...lab, ...updates } : lab
@@ -369,7 +450,8 @@ export const updateLab = (labId, updates) => {
   setLabs(updatedLabs);
   return updatedLabs.find(lab => lab.id === labId);
 };
-export const deleteLab = (labId) => {
+export const deleteLab = async (labId) => {
+  await persistToBackend(`/labs/${labId}`, 'DELETE');
   const labs = getLabs();
   const filteredLabs = labs.filter(lab => lab.id !== labId);
   setLabs(filteredLabs);
@@ -379,12 +461,20 @@ export const deleteLab = (labId) => {
 // Assessments
 export const getAssessments = () => getItem(STORAGE_KEYS.ASSESSMENTS, []);
 export const setAssessments = (assessments) => setItem(STORAGE_KEYS.ASSESSMENTS, assessments);
-export const addAssessment = (assessment) => {
+export const addAssessment = async (assessment) => {
+  const apiResult = await persistToBackend('/assessments', 'POST', assessment);
+  if (apiResult?.id) {
+    const assessments = getAssessments();
+    setAssessments([...assessments, { ...assessment, id: assessment.id || apiResult.id }]);
+    return { ...assessment, id: assessment.id || apiResult.id };
+  }
+
   const assessments = getAssessments();
   setAssessments([...assessments, assessment]);
   return assessment;
 };
-export const updateAssessment = (assessmentId, updates) => {
+export const updateAssessment = async (assessmentId, updates) => {
+  await persistToBackend(`/assessments/${assessmentId}`, 'PUT', updates);
   const assessments = getAssessments();
   const updatedAssessments = assessments.map(assessment =>
     assessment.id === assessmentId ? { ...assessment, ...updates } : assessment
@@ -392,7 +482,8 @@ export const updateAssessment = (assessmentId, updates) => {
   setAssessments(updatedAssessments);
   return updatedAssessments.find(assessment => assessment.id === assessmentId);
 };
-export const deleteAssessment = (assessmentId) => {
+export const deleteAssessment = async (assessmentId) => {
+  await persistToBackend(`/assessments/${assessmentId}`, 'DELETE');
   const assessments = getAssessments();
   const filteredAssessments = assessments.filter(assessment => assessment.id !== assessmentId);
   setAssessments(filteredAssessments);
@@ -402,12 +493,20 @@ export const deleteAssessment = (assessmentId) => {
 // Results
 export const getResults = () => getItem(STORAGE_KEYS.RESULTS, []);
 export const setResults = (results) => setItem(STORAGE_KEYS.RESULTS, results);
-export const addResult = (result) => {
+export const addResult = async (result) => {
+  const apiResult = await persistToBackend('/results', 'POST', result);
+  if (apiResult?.id) {
+    const results = getResults();
+    setResults([...results, { ...result, id: result.id || apiResult.id }]);
+    return { ...result, id: result.id || apiResult.id };
+  }
+
   const results = getResults();
   setResults([...results, result]);
   return result;
 };
-export const updateResult = (resultId, updates) => {
+export const updateResult = async (resultId, updates) => {
+  await persistToBackend(`/results/${resultId}`, 'PUT', updates);
   const results = getResults();
   const updatedResults = results.map(result =>
     result.id === resultId ? { ...result, ...updates } : result
@@ -415,7 +514,8 @@ export const updateResult = (resultId, updates) => {
   setResults(updatedResults);
   return updatedResults.find(result => result.id === resultId);
 };
-export const deleteResult = (resultId) => {
+export const deleteResult = async (resultId) => {
+  await persistToBackend(`/results/${resultId}`, 'DELETE');
   const results = getResults();
   const filteredResults = results.filter(result => result.id !== resultId);
   setResults(filteredResults);
@@ -425,12 +525,20 @@ export const deleteResult = (resultId) => {
 // Attendance
 export const getAttendance = () => getItem(STORAGE_KEYS.ATTENDANCE, []);
 export const setAttendance = (attendance) => setItem(STORAGE_KEYS.ATTENDANCE, attendance);
-export const addAttendance = (record) => {
+export const addAttendance = async (record) => {
+  const apiResult = await persistToBackend('/attendance', 'POST', record);
+  if (apiResult?.id) {
+    const attendance = getAttendance();
+    setAttendance([...attendance, { ...record, id: record.id || apiResult.id }]);
+    return { ...record, id: record.id || apiResult.id };
+  }
+
   const attendance = getAttendance();
   setAttendance([...attendance, record]);
   return record;
 };
-export const updateAttendance = (recordId, updates) => {
+export const updateAttendance = async (recordId, updates) => {
+  await persistToBackend(`/attendance/${recordId}`, 'PUT', updates);
   const attendance = getAttendance();
   const updatedAttendance = attendance.map(record =>
     record.id === recordId ? { ...record, ...updates } : record
@@ -438,7 +546,8 @@ export const updateAttendance = (recordId, updates) => {
   setAttendance(updatedAttendance);
   return updatedAttendance.find(record => record.id === recordId);
 };
-export const deleteAttendance = (recordId) => {
+export const deleteAttendance = async (recordId) => {
+  await persistToBackend(`/attendance/${recordId}`, 'DELETE');
   const attendance = getAttendance();
   const filteredAttendance = attendance.filter(record => record.id !== recordId);
   setAttendance(filteredAttendance);
@@ -448,12 +557,20 @@ export const deleteAttendance = (recordId) => {
 // Schedules
 export const getSchedules = () => getItem(STORAGE_KEYS.SCHEDULES, []);
 export const setSchedules = (schedules) => setItem(STORAGE_KEYS.SCHEDULES, schedules);
-export const addSchedule = (schedule) => {
+export const addSchedule = async (schedule) => {
+  const apiResult = await persistToBackend('/schedules', 'POST', schedule);
+  if (apiResult?.id) {
+    const schedules = getSchedules();
+    setSchedules([...schedules, { ...schedule, id: schedule.id || apiResult.id }]);
+    return { ...schedule, id: schedule.id || apiResult.id };
+  }
+
   const schedules = getSchedules();
   setSchedules([...schedules, schedule]);
   return schedule;
 };
-export const updateSchedule = (scheduleId, updates) => {
+export const updateSchedule = async (scheduleId, updates) => {
+  await persistToBackend(`/schedules/${scheduleId}`, 'PUT', updates);
   const schedules = getSchedules();
   const updatedSchedules = schedules.map(schedule =>
     schedule.id === scheduleId ? { ...schedule, ...updates } : schedule
@@ -461,7 +578,8 @@ export const updateSchedule = (scheduleId, updates) => {
   setSchedules(updatedSchedules);
   return updatedSchedules.find(schedule => schedule.id === scheduleId);
 };
-export const deleteSchedule = (scheduleId) => {
+export const deleteSchedule = async (scheduleId) => {
+  await persistToBackend(`/schedules/${scheduleId}`, 'DELETE');
   const schedules = getSchedules();
   const filteredSchedules = schedules.filter(schedule => schedule.id !== scheduleId);
   setSchedules(filteredSchedules);
@@ -471,12 +589,20 @@ export const deleteSchedule = (scheduleId) => {
 // Violations
 export const getViolations = () => getItem(STORAGE_KEYS.VIOLATIONS, []);
 export const setViolations = (violations) => setItem(STORAGE_KEYS.VIOLATIONS, violations);
-export const addViolation = (violation) => {
+export const addViolation = async (violation) => {
+  const apiResult = await persistToBackend('/violations', 'POST', violation);
+  if (apiResult?.id) {
+    const violations = getViolations();
+    setViolations([...violations, { ...violation, id: violation.id || apiResult.id }]);
+    return { ...violation, id: violation.id || apiResult.id };
+  }
+
   const violations = getViolations();
   setViolations([...violations, violation]);
   return violation;
 };
-export const updateViolation = (violationId, updates) => {
+export const updateViolation = async (violationId, updates) => {
+  await persistToBackend(`/violations/${violationId}`, 'PUT', updates);
   const violations = getViolations();
   const updatedViolations = violations.map(violation =>
     violation.id === violationId ? { ...violation, ...updates } : violation
@@ -484,7 +610,8 @@ export const updateViolation = (violationId, updates) => {
   setViolations(updatedViolations);
   return updatedViolations.find(violation => violation.id === violationId);
 };
-export const deleteViolation = (violationId) => {
+export const deleteViolation = async (violationId) => {
+  await persistToBackend(`/violations/${violationId}`, 'DELETE');
   const violations = getViolations();
   const filteredViolations = violations.filter(violation => violation.id !== violationId);
   setViolations(filteredViolations);
@@ -494,12 +621,20 @@ export const deleteViolation = (violationId) => {
 // Notifications
 export const getNotifications = () => getItem(STORAGE_KEYS.NOTIFICATIONS, []);
 export const setNotifications = (notifications) => setItem(STORAGE_KEYS.NOTIFICATIONS, notifications);
-export const addNotification = (notification) => {
+export const addNotification = async (notification) => {
+  const apiResult = await persistToBackend('/notifications', 'POST', notification);
+  if (apiResult?.id) {
+    const notifications = getNotifications();
+    setNotifications([{ ...notification, id: notification.id || apiResult.id }, ...notifications]);
+    return { ...notification, id: notification.id || apiResult.id };
+  }
+
   const notifications = getNotifications();
-  setNotifications([notification, ...notifications]); // Add to beginning
+  setNotifications([notification, ...notifications]);
   return notification;
 };
-export const updateNotification = (notificationId, updates) => {
+export const updateNotification = async (notificationId, updates) => {
+  await persistToBackend(`/notifications/${notificationId}`, 'PUT', updates);
   const notifications = getNotifications();
   const updatedNotifications = notifications.map(notification =>
     notification.id === notificationId ? { ...notification, ...updates } : notification
@@ -507,7 +642,8 @@ export const updateNotification = (notificationId, updates) => {
   setNotifications(updatedNotifications);
   return updatedNotifications.find(notification => notification.id === notificationId);
 };
-export const deleteNotification = (notificationId) => {
+export const deleteNotification = async (notificationId) => {
+  await persistToBackend(`/notifications/${notificationId}`, 'DELETE');
   const notifications = getNotifications();
   const filteredNotifications = notifications.filter(n => n.id !== notificationId);
   setNotifications(filteredNotifications);
@@ -526,12 +662,20 @@ export const addAuditLog = (log) => {
 // Restrictions
 export const getRestrictions = () => getItem(STORAGE_KEYS.RESTRICTIONS, []);
 export const setRestrictions = (restrictions) => setItem(STORAGE_KEYS.RESTRICTIONS, restrictions);
-export const addRestriction = (restriction) => {
+export const addRestriction = async (restriction) => {
+  const apiResult = await persistToBackend('/restrictions', 'POST', restriction);
+  if (apiResult?.id) {
+    const restrictions = getRestrictions();
+    setRestrictions([...restrictions, { ...restriction, id: restriction.id || apiResult.id }]);
+    return { ...restriction, id: restriction.id || apiResult.id };
+  }
+
   const restrictions = getRestrictions();
   setRestrictions([...restrictions, restriction]);
   return restriction;
 };
-export const updateRestriction = (restrictionId, updates) => {
+export const updateRestriction = async (restrictionId, updates) => {
+  await persistToBackend(`/restrictions/${restrictionId}`, 'PUT', updates);
   const restrictions = getRestrictions();
   const updatedRestrictions = restrictions.map(restriction =>
     restriction.id === restrictionId ? { ...restriction, ...updates } : restriction
@@ -539,7 +683,8 @@ export const updateRestriction = (restrictionId, updates) => {
   setRestrictions(updatedRestrictions);
   return updatedRestrictions.find(r => r.id === restrictionId);
 };
-export const deleteRestriction = (restrictionId) => {
+export const deleteRestriction = async (restrictionId) => {
+  await persistToBackend(`/restrictions/${restrictionId}`, 'DELETE');
   const restrictions = getRestrictions();
   const filteredRestrictions = restrictions.filter(r => r.id !== restrictionId);
   setRestrictions(filteredRestrictions);
@@ -549,12 +694,20 @@ export const deleteRestriction = (restrictionId) => {
 // Backups
 export const getBackups = () => getItem(STORAGE_KEYS.BACKUPS, []);
 export const setBackups = (backups) => setItem(STORAGE_KEYS.BACKUPS, backups);
-export const addBackup = (backup) => {
+export const addBackup = async (backup) => {
+  const apiResult = await persistToBackend('/backups', 'POST', backup);
+  if (apiResult?.id) {
+    const backups = getBackups();
+    setBackups([{ ...backup, id: backup.id || apiResult.id }, ...backups]);
+    return { ...backup, id: backup.id || apiResult.id };
+  }
+
   const backups = getBackups();
-  setBackups([backup, ...backups]); // Add to beginning
+  setBackups([backup, ...backups]);
   return backup;
 };
-export const deleteBackup = (backupId) => {
+export const deleteBackup = async (backupId) => {
+  await persistToBackend(`/backups/${backupId}`, 'DELETE');
   const backups = getBackups();
   const filteredBackups = backups.filter(b => b.id !== backupId);
   setBackups(filteredBackups);
@@ -564,12 +717,20 @@ export const deleteBackup = (backupId) => {
 // Faculty
 export const getFaculty = () => getItem(STORAGE_KEYS.FACULTY, []);
 export const setFaculty = (faculty) => setItem(STORAGE_KEYS.FACULTY, faculty);
-export const addFaculty = (facultyMember) => {
+export const addFaculty = async (facultyMember) => {
+  const apiResult = await persistToBackend('/faculty', 'POST', facultyMember);
+  if (apiResult?.id) {
+    const faculty = getFaculty();
+    setFaculty([...faculty, { ...facultyMember, id: facultyMember.id || apiResult.id }]);
+    return { ...facultyMember, id: facultyMember.id || apiResult.id };
+  }
+
   const faculty = getFaculty();
   setFaculty([...faculty, facultyMember]);
   return facultyMember;
 };
-export const updateFaculty = (facultyId, updates) => {
+export const updateFaculty = async (facultyId, updates) => {
+  await persistToBackend(`/faculty/${facultyId}`, 'PUT', updates);
   const faculty = getFaculty();
   const updatedFaculty = faculty.map(f =>
     f.id === facultyId ? { ...f, ...updates } : f
@@ -577,7 +738,8 @@ export const updateFaculty = (facultyId, updates) => {
   setFaculty(updatedFaculty);
   return updatedFaculty.find(f => f.id === facultyId);
 };
-export const deleteFaculty = (facultyId) => {
+export const deleteFaculty = async (facultyId) => {
+  await persistToBackend(`/faculty/${facultyId}`, 'DELETE');
   const faculty = getFaculty();
   const filteredFaculty = faculty.filter(f => f.id !== facultyId);
   setFaculty(filteredFaculty);
@@ -587,12 +749,20 @@ export const deleteFaculty = (facultyId) => {
 // Student Groups
 export const getStudentGroups = () => getItem(STORAGE_KEYS.STUDENT_GROUPS, []);
 export const setStudentGroups = (groups) => setItem(STORAGE_KEYS.STUDENT_GROUPS, groups);
-export const addStudentGroup = (group) => {
+export const addStudentGroup = async (group) => {
+  const apiResult = await persistToBackend('/student-groups', 'POST', group);
+  if (apiResult?.id) {
+    const groups = getStudentGroups();
+    setStudentGroups([...groups, { ...group, id: group.id || apiResult.id }]);
+    return { ...group, id: group.id || apiResult.id };
+  }
+
   const groups = getStudentGroups();
   setStudentGroups([...groups, group]);
   return group;
 };
-export const updateStudentGroup = (groupId, updates) => {
+export const updateStudentGroup = async (groupId, updates) => {
+  await persistToBackend(`/student-groups/${groupId}`, 'PUT', updates);
   const groups = getStudentGroups();
   const updatedGroups = groups.map(group =>
     group.id === groupId ? { ...group, ...updates } : group
@@ -600,7 +770,8 @@ export const updateStudentGroup = (groupId, updates) => {
   setStudentGroups(updatedGroups);
   return updatedGroups.find(g => g.id === groupId);
 };
-export const deleteStudentGroup = (groupId) => {
+export const deleteStudentGroup = async (groupId) => {
+  await persistToBackend(`/student-groups/${groupId}`, 'DELETE');
   const groups = getStudentGroups();
   const filteredGroups = groups.filter(g => g.id !== groupId);
   setStudentGroups(filteredGroups);
@@ -610,10 +781,12 @@ export const deleteStudentGroup = (groupId) => {
 // Settings
 export const getSettings = () => getItem(STORAGE_KEYS.SETTINGS, {});
 export const setSettings = (settings) => setItem(STORAGE_KEYS.SETTINGS, settings);
-export const updateSettings = (updates) => {
+export const updateSettings = async (updates) => {
+  const apiResult = await persistToBackend('/settings', 'POST', updates);
   const settings = getSettings();
-  setSettings({ ...settings, ...updates });
-  return { ...settings, ...updates };
+  const merged = { ...settings, ...updates };
+  setSettings(merged);
+  return merged;
 };
 
 // Theme
@@ -717,6 +890,119 @@ export const recordAssessmentAttempt = (assessmentId, studentId) => {
   };
   setAssessmentUnlocks(updatedUnlocks);
   return updatedUnlocks[assessmentId].find(item => item.id === grant.id);
+};
+
+// ===== ASSESSMENT GLOBAL POLICY =====
+// Admin-controlled defaults applied to every assessment unless a
+// per-assessment or per-session override exists.
+export const DEFAULT_GLOBAL_ASSESSMENT_POLICY = {
+  timeLimit: 60,          // minutes
+  questionsPerAttempt: 5, // how many questions are drawn from a level's pool
+  maxViolations: 3,       // proctoring signals allowed before auto-submit
+  fullScreenRequired: true,
+  updatedAt: null,
+  updatedBy: null,
+};
+
+export const getGlobalAssessmentPolicy = () => ({
+  ...DEFAULT_GLOBAL_ASSESSMENT_POLICY,
+  ...getItem(STORAGE_KEYS.ASSESSMENT_GLOBAL_POLICY, {}),
+});
+
+export const setGlobalAssessmentPolicy = (policy, updatedBy = null) => {
+  const merged = {
+    ...getGlobalAssessmentPolicy(),
+    ...policy,
+    updatedAt: new Date().toISOString(),
+    updatedBy,
+  };
+  setItem(STORAGE_KEYS.ASSESSMENT_GLOBAL_POLICY, merged);
+  return merged;
+};
+
+// ===== ASSESSMENT LIVE SESSIONS =====
+// A "session" is how admin/faculty opens an assessment to every student at
+// once (instead of unlocking students one by one). While isLive is true and
+// the current time is before endsAt, every student may enter. Per-student
+// grants from unlockAssessmentForStudent still work for individual
+// exceptions/extensions on top of this.
+export const getAssessmentSessions = () => getItem(STORAGE_KEYS.ASSESSMENT_SESSIONS, {});
+export const setAssessmentSessions = (sessions) => setItem(STORAGE_KEYS.ASSESSMENT_SESSIONS, sessions);
+
+export const getAssessmentSession = (assessmentId) => {
+  const sessions = getAssessmentSessions();
+  return sessions[assessmentId] || null;
+};
+
+export const startAssessmentSession = (assessmentId, options = {}) => {
+  const sessions = getAssessmentSessions();
+  const durationMinutes = Number(options.durationMinutes) > 0 ? Number(options.durationMinutes) : null;
+  const startedAt = new Date().toISOString();
+  const session = {
+    isLive: true,
+    startedAt,
+    startedBy: options.startedBy || 'system',
+    endsAt: durationMinutes ? new Date(Date.now() + durationMinutes * 60000).toISOString() : null,
+    timeLimitOverride: Number(options.timeLimitOverride) > 0 ? Number(options.timeLimitOverride) : null,
+    fullScreenRequired: typeof options.fullScreenRequired === 'boolean' ? options.fullScreenRequired : null,
+    maxViolations: Number(options.maxViolations) > 0 ? Number(options.maxViolations) : null,
+    questionsPerAttempt: Number(options.questionsPerAttempt) > 0 ? Number(options.questionsPerAttempt) : null,
+  };
+  const updated = { ...sessions, [assessmentId]: session };
+  setAssessmentSessions(updated);
+  return session;
+};
+
+export const extendAssessmentSession = (assessmentId, extraMinutes) => {
+  const sessions = getAssessmentSessions();
+  const current = sessions[assessmentId];
+  if (!current) return null;
+  const base = current.endsAt ? new Date(current.endsAt) : new Date();
+  const updatedSession = { ...current, endsAt: new Date(base.getTime() + Number(extraMinutes || 0) * 60000).toISOString() };
+  const updated = { ...sessions, [assessmentId]: updatedSession };
+  setAssessmentSessions(updated);
+  return updatedSession;
+};
+
+export const stopAssessmentSession = (assessmentId) => {
+  const sessions = getAssessmentSessions();
+  const current = sessions[assessmentId];
+  if (!current) return null;
+  const updatedSession = { ...current, isLive: false, endedAt: new Date().toISOString() };
+  const updated = { ...sessions, [assessmentId]: updatedSession };
+  setAssessmentSessions(updated);
+  return updatedSession;
+};
+
+export const isAssessmentSessionLive = (assessmentId) => {
+  const session = getAssessmentSession(assessmentId);
+  if (!session || !session.isLive) return false;
+  if (session.endsAt && new Date(session.endsAt) <= new Date()) return false;
+  return true;
+};
+
+// ===== PER-STUDENT RANDOMIZED QUESTION SELECTION =====
+// Once a student's subset of questions is drawn from the pool for an
+// attempt, it's pinned here so refreshing the page doesn't reshuffle it.
+export const getQuestionSelections = () => getItem(STORAGE_KEYS.ASSESSMENT_QUESTION_SELECTIONS, {});
+export const getQuestionSelectionFor = (assessmentId, studentId) => {
+  const all = getQuestionSelections();
+  return all[assessmentId]?.[studentId] || null;
+};
+export const setQuestionSelectionFor = (assessmentId, studentId, questionIds) => {
+  const all = getQuestionSelections();
+  const updated = {
+    ...all,
+    [assessmentId]: { ...(all[assessmentId] || {}), [studentId]: questionIds },
+  };
+  setItem(STORAGE_KEYS.ASSESSMENT_QUESTION_SELECTIONS, updated);
+  return questionIds;
+};
+export const clearQuestionSelectionFor = (assessmentId, studentId) => {
+  const all = getQuestionSelections();
+  if (!all[assessmentId]) return;
+  const { [studentId]: _drop, ...rest } = all[assessmentId];
+  setItem(STORAGE_KEYS.ASSESSMENT_QUESTION_SELECTIONS, { ...all, [assessmentId]: rest });
 };
 
 // Student Progress
@@ -1083,7 +1369,26 @@ export default {
   unlockAssessmentForStudent,
   lockAssessmentForStudent,
   isAssessmentUnlockedForStudent,
+  getAssessmentAccessForStudent,
   recordAssessmentAttempt,
+
+  // Assessment Global Policy
+  getGlobalAssessmentPolicy,
+  setGlobalAssessmentPolicy,
+
+  // Assessment Live Sessions
+  getAssessmentSessions,
+  getAssessmentSession,
+  startAssessmentSession,
+  extendAssessmentSession,
+  stopAssessmentSession,
+  isAssessmentSessionLive,
+
+  // Per-student randomized question selection
+  getQuestionSelections,
+  getQuestionSelectionFor,
+  setQuestionSelectionFor,
+  clearQuestionSelectionFor,
 
   // Student Progress
   getStudentProgress,

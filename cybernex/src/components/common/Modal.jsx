@@ -100,14 +100,14 @@ const Modal = ({
     >
       {/* Overlay */}
       <div
-        className={`fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity animate-fade-in`}
+        className="fixed inset-0 bg-slate-950/70 transition-opacity animate-fade-in"
         aria-hidden="true"
       />
 
       {/* Modal */}
       <div
         ref={modalRef}
-        className={`w-full ${sizeClasses[size] || sizeClasses.md} bg-white dark:bg-gray-800 rounded-xl shadow-xl overflow-hidden transition-all animate-scale-in ${className}`}
+        className={`relative z-10 w-full ${sizeClasses[size] || sizeClasses.md} bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all animate-scale-in ${className}`}
       >
         {/* Header */}
         {(title || showCloseButton) && (

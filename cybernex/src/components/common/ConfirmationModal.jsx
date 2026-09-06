@@ -29,8 +29,10 @@ const ConfirmationModal = ({
   type = 'warning',
   confirmText = 'Confirm',
   cancelText = 'Cancel',
+  confirmVariant,
   requireConfirmationText = false,
   confirmationText = '',
+  isLoading = false,
   children
 }) => {
   const [inputValue, setInputValue] = useState('');
@@ -50,8 +52,10 @@ const ConfirmationModal = ({
     }
   }, [type]);
 
-  // Button variant based on type
+  // Button variant based on type or explicit override
   const getConfirmButtonVariant = useCallback(() => {
+    if (confirmVariant) return confirmVariant;
+
     switch (type) {
       case 'danger':
         return 'danger';
@@ -60,7 +64,7 @@ const ConfirmationModal = ({
       default:
         return 'primary';
     }
-  }, [type]);
+  }, [confirmVariant, type]);
 
   // Handle confirm
   const handleConfirm = useCallback(() => {
@@ -77,7 +81,10 @@ const ConfirmationModal = ({
         setIsConfirming(false);
       }
     }
-    onClose();
+
+    if (!onConfirm || !onConfirm.constructor || onConfirm.constructor.name !== 'AsyncFunction') {
+      onClose();
+    }
   }, [onConfirm, onClose, requireConfirmationText, inputValue, confirmationText]);
 
   // Handle input change
@@ -87,6 +94,7 @@ const ConfirmationModal = ({
 
   // Check if confirm button should be disabled
   const isConfirmDisabled = requireConfirmationText && inputValue !== confirmationText;
+  const effectiveLoading = isLoading || isConfirming;
 
   return (
     <Modal
@@ -143,8 +151,8 @@ const ConfirmationModal = ({
         <Button
           variant={getConfirmButtonVariant()}
           onClick={handleConfirm}
-          disabled={isConfirmDisabled || isConfirming}
-          isLoading={isConfirming}
+          disabled={isConfirmDisabled || effectiveLoading}
+          isLoading={effectiveLoading}
         >
           {confirmText}
         </Button>

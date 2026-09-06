@@ -297,9 +297,9 @@ const LearningDetail = () => {
                         const isCompleted = userCourses.lessons?.completed?.includes(lesson.id);
                         
                         return (
-                          <button
+                          <Link
                             key={lesson.id}
-                            onClick={() => setActiveLesson(lesson)}
+                            to={`/student/learning/${courseId}/${lesson.id}`}
                             className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
                               isActive 
                                 ? 'bg-primary text-white' 
@@ -328,7 +328,7 @@ const LearningDetail = () => {
                             {isCompleted && !isActive && (
                               <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
                             )}
-                          </button>
+                          </Link>
                         );
                       })}
                     </div>
@@ -452,39 +452,6 @@ const LearningDetail = () => {
               </div>
             </div>
           </Card>
-
-          {/* Prerequisites */}
-          {course.prerequisites && course.prerequisites.length > 0 && (
-            <Card>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Prerequisites</h3>
-              <div className="space-y-3">
-                {course.prerequisites.map(prereq => {
-                  const prereqCourse = filteredCourses.find(c => c.id === prereq);
-                  const isCompleted = user?.progress?.courses?.completed?.includes(prereq);
-                  
-                  return (
-                    <div key={prereq} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="flex-shrink-0">
-                        {isCompleted ? (
-                          <CheckCircle size={20} className="text-green-600" />
-                        ) : (
-                          <BookOpen size={20} className="text-gray-500" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 dark:text-white">
-                          {prereqCourse?.title || prereq}
-                        </h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
-                          {isCompleted ? 'Completed' : 'Required'}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
 
           {/* Learning Outcomes */}
           {course.learningOutcomes && course.learningOutcomes.length > 0 && (

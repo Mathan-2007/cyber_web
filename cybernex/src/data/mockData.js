@@ -15,6 +15,9 @@ export * from './results';
 export * from './violations';
 export * from './auditLogs';
 export * from './notifications';
+export * from './learning';
+
+import { STUDENT_LEARNING_MODULES } from './learning';
 
 // Re-export sample data from constants
 import {
@@ -63,7 +66,8 @@ export const MOCK_DATA = {
   schedules: SAMPLE_SCHEDULES,
   violations: SAMPLE_VIOLATIONS,
   notifications: SAMPLE_NOTIFICATIONS,
-  auditLogs: SAMPLE_AUDIT_LOGS
+  auditLogs: SAMPLE_AUDIT_LOGS,
+  learningModules: STUDENT_LEARNING_MODULES
 };
 
 // Initialize localStorage with mock data
@@ -139,7 +143,8 @@ export const getAllMockData = () => {
     schedules: SAMPLE_SCHEDULES,
     violations: SAMPLE_VIOLATIONS,
     notifications: SAMPLE_NOTIFICATIONS,
-    auditLogs: SAMPLE_AUDIT_LOGS
+    auditLogs: SAMPLE_AUDIT_LOGS,
+    learningModules: STUDENT_LEARNING_MODULES
   };
 };
 

@@ -518,6 +518,7 @@ const Backups = () => {
         confirmText="Delete Backup"
         confirmVariant="danger"
         cancelText="Cancel"
+        type="danger"
         isLoading={isProcessing}
       />
     </div>

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { useNavigate } from 'react-router-dom';
 import { ROLES, DEMO_CREDENTIALS, STORAGE_KEYS } from '../utils/constants';
 import { getItem, setItem, removeItem, logAction, initializeMockData } from '../services/storageService';
+import { apiRequest, setAuthToken, clearAuthToken } from '../services/api';
 import { ADMIN_DEFAULT_PERMISSIONS, FACULTY_DEFAULT_PERMISSIONS, STUDENT_DEFAULT_PERMISSIONS } from '../permissions/rolePermissions';
 import { getAllPermissionsForUser } from '../permissions/rolePermissions';
 
@@ -15,16 +16,33 @@ const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Initialize auth state from localStorage
+  // Initialize auth state from localStorage and verified backend session
   useEffect(() => {
-    const initializeAuth = () => {
+    const initializeAuth = async () => {
       try {
         initializeMockData();
       } catch (err) {
         console.warn('Failed to initialize mock data:', err);
       }
+
       try {
         const storedUser = getItem(STORAGE_KEYS.USER);
+        const token = localStorage.getItem('cybernex_token');
+
+        if (token) {
+          try {
+            const response = await apiRequest('/auth/me');
+            const hydratedUser = { ...response.user, sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() };
+            setUser(hydratedUser);
+            setIsAuthenticated(true);
+            setItem(STORAGE_KEYS.USER, hydratedUser);
+            return;
+          } catch (error) {
+            console.warn('Stored backend session invalid, clearing token:', error.message);
+            clearAuthToken();
+          }
+        }
+
         if (storedUser?.sessionExpiresAt && new Date(storedUser.sessionExpiresAt) <= new Date()) {
           removeItem(STORAGE_KEYS.USER);
         } else if (storedUser) {
@@ -45,17 +63,20 @@ const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (user) {
       setItem(STORAGE_KEYS.USER, user);
-      // Log login action
+      if (user.token) {
+        setAuthToken(user.token);
+      }
       logAction({
         action: 'LOGIN',
         userId: user.id,
         role: user.role,
         target: 'System',
         status: 'Success',
-        details: { method: 'localStorage' }
+        details: { method: 'backend_or_local_storage' }
       });
     } else {
       removeItem(STORAGE_KEYS.USER);
+      clearAuthToken();
     }
   }, [user]);
 
@@ -65,94 +86,85 @@ const AuthProvider = ({ children }) => {
     setIsLoading(true);
 
     try {
-      // Check demo credentials first
+      try {
+        const response = await apiRequest('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+
+        const userToSet = {
+          ...response.user,
+          token: response.token,
+          sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+          permissions: response.user.permissions ||
+            (response.user.role === ROLES.ADMIN ? ADMIN_DEFAULT_PERMISSIONS :
+             response.user.role === ROLES.FACULTY ? FACULTY_DEFAULT_PERMISSIONS :
+             STUDENT_DEFAULT_PERMISSIONS)
+        };
+
+        setUser(userToSet);
+        setIsAuthenticated(true);
+
+        const redirectPath = userToSet.role === ROLES.ADMIN ? '/admin/dashboard' :
+                             userToSet.role === ROLES.FACULTY ? '/faculty/dashboard' :
+                             '/student/dashboard';
+
+        navigate(redirectPath);
+        setIsLoading(false);
+        return { success: true, user: userToSet };
+      } catch (backendError) {
+        console.warn('Backend auth failed, falling back to local demo login:', backendError.message);
+      }
+
       const demoUser = Object.entries(DEMO_CREDENTIALS).find(([role, creds]) =>
         creds.email === email && creds.password === password
       );
 
       if (demoUser) {
         const [role, creds] = demoUser;
-        // Match the demo role as a fallback. This keeps demo login working for
-        // browsers that still contain an older sample email in local storage.
         const userData = getItem(STORAGE_KEYS.USERS, []).find(u => u.email === email) ||
           getItem(STORAGE_KEYS.USERS, []).find(u => u.role === role);
 
         if (userData) {
-          // Use existing user data
           const userToSet = {
             ...userData,
             email: creds.email,
             password: creds.password,
             sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-            // Ensure permissions are set
             permissions: userData.permissions ||
               (role === ROLES.ADMIN ? ADMIN_DEFAULT_PERMISSIONS :
                role === ROLES.FACULTY ? FACULTY_DEFAULT_PERMISSIONS :
                STUDENT_DEFAULT_PERMISSIONS)
           };
 
-          console.debug('[Auth] demo user found, setting user:', userToSet.id);
           setUser(userToSet);
           setIsAuthenticated(true);
 
-          // Log action
-          logAction({
-            action: 'LOGIN',
-            userId: userToSet.id,
-            role: userToSet.role,
-            target: 'System',
-            status: 'Success',
-            details: { method: 'demo' }
-          });
-
-          // Redirect based on role
           const redirectPath = userToSet.role === ROLES.ADMIN ? '/admin/dashboard' :
                                userToSet.role === ROLES.FACULTY ? '/faculty/dashboard' :
                                '/student/dashboard';
 
-          console.debug('[Auth] navigating to', redirectPath);
           navigate(redirectPath);
           setIsLoading(false);
           return { success: true, user: userToSet };
         }
       }
 
-      // Check regular users
       const users = getItem(STORAGE_KEYS.USERS, []);
       const user = users.find(u => u.email === email);
 
-      if (user) {
-        // In a real app, you would verify the password hash here
-        // For this frontend-only version, we'll just check if passwords match
-        // Note: This is NOT secure for production - just for demo purposes
-        if (user.password === password) {
-          console.debug('[Auth] regular user authenticated:', user.id);
-          setUser({ ...user, sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() });
-          setIsAuthenticated(true);
+      if (user && user.password === password) {
+        const securedUser = { ...user, sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() };
+        setUser(securedUser);
+        setIsAuthenticated(true);
 
-          // Log action
-          logAction({
-            action: 'LOGIN',
-            userId: user.id,
-            role: user.role,
-            target: 'System',
-            status: 'Success',
-            details: { method: 'credentials' }
-          });
+        const redirectPath = securedUser.role === ROLES.ADMIN ? '/admin/dashboard' :
+                             securedUser.role === ROLES.FACULTY ? '/faculty/dashboard' :
+                             '/student/dashboard';
 
-          // Redirect based on role
-          const redirectPath = user.role === ROLES.ADMIN ? '/admin/dashboard' :
-                               user.role === ROLES.FACULTY ? '/faculty/dashboard' :
-                               '/student/dashboard';
-
-          console.debug('[Auth] navigating to', redirectPath);
-          navigate(redirectPath);
-          setIsLoading(false);
-          return { success: true, user };
-        } else {
-          setIsLoading(false);
-          return { success: false, error: 'Invalid email or password' };
-        }
+        navigate(redirectPath);
+        setIsLoading(false);
+        return { success: true, user: securedUser };
       }
 
       setIsLoading(false);
@@ -167,7 +179,6 @@ const AuthProvider = ({ children }) => {
   // ===== LOGOUT FUNCTION =====
   const logout = useCallback(() => {
     try {
-      // Log action before clearing
       if (user) {
         logAction({
           action: 'LOGOUT',
@@ -181,9 +192,7 @@ const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       removeItem(STORAGE_KEYS.USER);
-
-      // no remember-me cleanup required
-
+      clearAuthToken();
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);

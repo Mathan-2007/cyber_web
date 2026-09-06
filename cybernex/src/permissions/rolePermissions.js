@@ -11,15 +11,65 @@ import { ALL_PERMISSIONS, USER_PERMISSIONS } from './permissions';
 // ===== DEFAULT PERMISSIONS BY ROLE =====
 
 /**
- * Admin limited default permissions
- * Per request, admins are limited to core user management (add/remove/edit/change role)
+ * Admin master permissions.
+ * Admin is the top authority: full user management, plus full master
+ * control over assessments (question pools, global policy, live session
+ * control, and per-assessment overrides for time/violations/fullscreen)
+ * on top of everything faculty can already do.
  */
 export const ADMIN_DEFAULT_PERMISSIONS = [
+  // User Management
   USER_PERMISSIONS.VIEW,
   USER_PERMISSIONS.CREATE,
   USER_PERMISSIONS.EDIT,
   USER_PERMISSIONS.DELETE,
+  USER_PERMISSIONS.DEACTIVATE,
+  USER_PERMISSIONS.REACTIVATE,
+  USER_PERMISSIONS.RESET_PASSWORD,
   USER_PERMISSIONS.CHANGE_ROLE,
+  USER_PERMISSIONS.ASSIGN_COURSES,
+  USER_PERMISSIONS.ASSIGN_LEVEL,
+  USER_PERMISSIONS.MANAGE_RESTRICTIONS,
+
+  // Assessments — admin is master over everything faculty can do, plus:
+  'assessment.view',
+  'assessment.create',
+  'assessment.edit',
+  'assessment.delete',
+  'assessment.manage',
+  'assessment.start',
+  'assessment.review',
+  'assessment.grade',
+  'assessment.publish',
+  'assessment.unlock',
+  'assessment.lock',
+  'assessment.reset_attempts',
+  'assessment.set_duration',
+  'assessment.set_passing_score',
+  'assessment.set_difficulty',
+  'assessment.set_level',
+  'assessment.schedule',
+  'assessment.assign_students',
+  'assessment.manage_question_pool',
+  'assessment.control_session',
+  'assessment.set_global_policy',
+  'assessment.override_time',
+  'assessment.override_violations',
+  'assessment.override_fullscreen',
+
+  // Results & violations oversight
+  'results.view',
+  'results.view_all',
+  'results.manage',
+  'results.publish',
+  'results.analyze',
+  'violations.view',
+  'violations.view_all',
+  'violations.manage',
+  'violations.review',
+  'violations.dismiss',
+  'violations.escalate',
+  'violations.add_note',
 ];
 
 /**

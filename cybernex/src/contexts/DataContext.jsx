@@ -17,16 +17,32 @@ import {
   getTheme, setTheme,
   getPermissions, setPermissions, updateRolePermissions,
   getAssessmentUnlocks, setAssessmentUnlocks, unlockAssessmentForStudent, lockAssessmentForStudent, isAssessmentUnlockedForStudent, getAssessmentAccessForStudent, recordAssessmentAttempt,
+  getGlobalAssessmentPolicy, setGlobalAssessmentPolicy,
+  getAssessmentSessions, startAssessmentSession, extendAssessmentSession, stopAssessmentSession, isAssessmentSessionLive,
   getStudentProgress, setStudentProgress, updateStudentProgress,
   createBackup, downloadBackup, restoreBackup, importBackupFromFile,
   getBackups, setBackups,
   logAction
 } from '../services/storageService';
 import { useAuth } from './AuthContext';
+import { apiRequest } from '../services/api';
 import { ROLES, ASSESSMENT_STATES } from '../utils/constants';
 
 // ===== CREATE CONTEXT =====
 const DataContext = createContext(null);
+
+const safeLoadFromApi = async (endpoint, fallback) => {
+  try {
+    const response = await apiRequest(endpoint);
+    if (response !== null && response !== undefined) {
+      return response;
+    }
+  } catch (error) {
+    console.warn(`API fallback for ${endpoint}:`, error.message);
+  }
+
+  return typeof fallback === 'function' ? fallback() : fallback;
+};
 
 // ===== PROVIDER COMPONENT =====
 const DataProvider = ({ children }) => {
@@ -115,6 +131,8 @@ const DataProvider = ({ children }) => {
   // ===== ASSESSMENT UNLOCKS STATE =====
   const [assessmentUnlocks, setAssessmentUnlocksState] = useState({});
   const [assessmentUnlocksLoading, setAssessmentUnlocksLoading] = useState(false);
+  const [globalAssessmentPolicy, setGlobalAssessmentPolicyState] = useState(() => getGlobalAssessmentPolicy());
+  const [assessmentSessions, setAssessmentSessionsState] = useState(() => getAssessmentSessions());
 
   // ===== INITIAL DATA LOAD =====
   useEffect(() => {
@@ -130,11 +148,23 @@ const DataProvider = ({ children }) => {
           facultyData, studentGroupsData, settingsData,
           themeData, permissionsData, unlocksData
         ] = await Promise.all([
-          getUsers(), getCourses(), getLabs(), getAssessments(),
-          getResults(), getAttendance(), getSchedules(), getViolations(),
-          getNotifications(), getAuditLogs(), getRestrictions(),
-          getFaculty(), getStudentGroups(), getSettings(),
-          getTheme(), getPermissions(), getAssessmentUnlocks()
+          safeLoadFromApi('/users', getUsers),
+          safeLoadFromApi('/courses', getCourses),
+          safeLoadFromApi('/labs', getLabs),
+          safeLoadFromApi('/assessments', getAssessments),
+          safeLoadFromApi('/results', getResults),
+          safeLoadFromApi('/attendance', getAttendance),
+          safeLoadFromApi('/schedules', getSchedules),
+          safeLoadFromApi('/violations', getViolations),
+          safeLoadFromApi('/notifications', getNotifications),
+          safeLoadFromApi('/audit-logs', getAuditLogs),
+          safeLoadFromApi('/restrictions', getRestrictions),
+          safeLoadFromApi('/faculty', getFaculty),
+          safeLoadFromApi('/student-groups', getStudentGroups),
+          safeLoadFromApi('/settings', getSettings),
+          getTheme(),
+          getPermissions(),
+          getAssessmentUnlocks()
         ]);
 
         // Set all state
@@ -173,7 +203,7 @@ const DataProvider = ({ children }) => {
   const refreshUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
-      const data = await getUsers();
+      const data = await safeLoadFromApi('/users', getUsers);
       setUsersState(data);
       setUsersError(null);
     } catch (err) {
@@ -188,7 +218,7 @@ const DataProvider = ({ children }) => {
   const refreshCourses = useCallback(async () => {
     setCoursesLoading(true);
     try {
-      const data = await getCourses();
+      const data = await safeLoadFromApi('/courses', getCourses);
       setCoursesState(data);
       setCoursesError(null);
     } catch (err) {
@@ -203,7 +233,7 @@ const DataProvider = ({ children }) => {
   const refreshLabs = useCallback(async () => {
     setLabsLoading(true);
     try {
-      const data = await getLabs();
+      const data = await safeLoadFromApi('/labs', getLabs);
       setLabsState(data);
       setLabsError(null);
     } catch (err) {
@@ -218,7 +248,7 @@ const DataProvider = ({ children }) => {
   const refreshAssessments = useCallback(async () => {
     setAssessmentsLoading(true);
     try {
-      const data = await getAssessments();
+      const data = await safeLoadFromApi('/assessments', getAssessments);
       setAssessmentsState(data);
       setAssessmentsError(null);
     } catch (err) {
@@ -233,7 +263,7 @@ const DataProvider = ({ children }) => {
   const refreshResults = useCallback(async () => {
     setResultsLoading(true);
     try {
-      const data = await getResults();
+      const data = await safeLoadFromApi('/results', getResults);
       setResultsState(data);
       setResultsError(null);
     } catch (err) {
@@ -417,6 +447,83 @@ const DataProvider = ({ children }) => {
       setAssessmentUnlocksLoading(false);
     }
   }, []);
+
+  // Assessment Global Policy (admin-controlled defaults for every assessment)
+  const refreshGlobalAssessmentPolicy = useCallback(async () => {
+    try {
+      setGlobalAssessmentPolicyState(getGlobalAssessmentPolicy());
+    } catch (err) {
+      console.error('Error fetching global assessment policy:', err);
+    }
+  }, []);
+
+  const updateGlobalAssessmentPolicy = useCallback(async (policy) => {
+    const updated = setGlobalAssessmentPolicy(policy, user?.id || 'system');
+    setGlobalAssessmentPolicyState(updated);
+    logAction({
+      action: 'ASSESSMENT_GLOBAL_POLICY_UPDATED',
+      userId: user?.id || 'system',
+      role: user?.role || ROLES.ADMIN,
+      target: 'AssessmentPolicy',
+      targetId: 'global',
+      status: 'Success',
+      details: policy
+    });
+    return updated;
+  }, [user]);
+
+  // Assessment Live Sessions (admin/faculty opens an assessment to every student at once)
+  const refreshAssessmentSessions = useCallback(async () => {
+    try {
+      setAssessmentSessionsState(getAssessmentSessions());
+    } catch (err) {
+      console.error('Error fetching assessment sessions:', err);
+    }
+  }, []);
+
+  const startAssessmentForAll = useCallback(async (assessmentId, options = {}) => {
+    const session = startAssessmentSession(assessmentId, { ...options, startedBy: user?.id || 'system' });
+    setAssessmentSessionsState(getAssessmentSessions());
+    logAction({
+      action: 'ASSESSMENT_SESSION_STARTED',
+      userId: user?.id || 'system',
+      role: user?.role || ROLES.ADMIN,
+      target: 'Assessment',
+      targetId: assessmentId,
+      status: 'Success',
+      details: options
+    });
+    return session;
+  }, [user]);
+
+  const extendAssessmentForAll = useCallback(async (assessmentId, extraMinutes) => {
+    const session = extendAssessmentSession(assessmentId, extraMinutes);
+    setAssessmentSessionsState(getAssessmentSessions());
+    logAction({
+      action: 'ASSESSMENT_SESSION_EXTENDED',
+      userId: user?.id || 'system',
+      role: user?.role || ROLES.ADMIN,
+      target: 'Assessment',
+      targetId: assessmentId,
+      status: 'Success',
+      details: { extraMinutes }
+    });
+    return session;
+  }, [user]);
+
+  const stopAssessmentForAll = useCallback(async (assessmentId) => {
+    const session = stopAssessmentSession(assessmentId);
+    setAssessmentSessionsState(getAssessmentSessions());
+    logAction({
+      action: 'ASSESSMENT_SESSION_STOPPED',
+      userId: user?.id || 'system',
+      role: user?.role || ROLES.ADMIN,
+      target: 'Assessment',
+      targetId: assessmentId,
+      status: 'Success'
+    });
+    return session;
+  }, [user]);
 
   // ===== FILTERED DATA FOR CURRENT USER =====
   // Filter data based on user role and permissions
@@ -2065,6 +2172,17 @@ const DataProvider = ({ children }) => {
     lockAssessment,
     resetAssessmentAttempts,
 
+    // Assessment global policy + live session control (admin master control)
+    globalAssessmentPolicy,
+    assessmentSessions,
+    refreshGlobalAssessmentPolicy,
+    updateGlobalAssessmentPolicy,
+    refreshAssessmentSessions,
+    startAssessmentForAll,
+    extendAssessmentForAll,
+    stopAssessmentForAll,
+    isAssessmentSessionLive,
+
     // Result CRUD
     createResult,
     modifyResult,
@@ -2142,6 +2260,7 @@ const DataProvider = ({ children }) => {
     isLoading, error, users, courses, labs, assessments, results, attendance,
     schedules, violations, notifications, auditLogs, restrictions, faculty,
     studentGroups, settings, theme, permissions, assessmentUnlocks,
+    globalAssessmentPolicy, assessmentSessions,
 
     // Loading states
     usersLoading, coursesLoading, labsLoading, assessmentsLoading, resultsLoading,
@@ -2167,6 +2286,8 @@ const DataProvider = ({ children }) => {
     createLab, modifyLab, removeLab,
     createAssessment, modifyAssessment, removeAssessment,
     unlockAssessment, lockAssessment, resetAssessmentAttempts,
+    refreshGlobalAssessmentPolicy, updateGlobalAssessmentPolicy,
+    refreshAssessmentSessions, startAssessmentForAll, extendAssessmentForAll, stopAssessmentForAll,
     createResult, modifyResult, publishResult,
     createAttendance, modifyAttendance,
     createSchedule, modifySchedule, removeSchedule,

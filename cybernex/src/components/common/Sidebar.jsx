@@ -143,6 +143,13 @@ const Sidebar = ({ isCollapsed = false, onToggleCollapse }) => {
         permissions: ['assessment.view']
       },
       {
+        id: 'admin-assessment-control',
+        label: 'Assessment Control',
+        icon: ShieldCheck,
+        path: '/admin/assessment-control',
+        permissions: ['assessment.manage']
+      },
+      {
         id: 'admin-attendance',
         label: 'Attendance',
         icon: ClipboardList,

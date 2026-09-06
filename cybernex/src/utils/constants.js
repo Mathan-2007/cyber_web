@@ -1,6 +1,6 @@
 // ===== APP CONSTANTS =====
 export const APP_NAME = 'cybernex';
-export const APP_VERSION = '1.0.2';
+export const APP_VERSION = '1.0.3';
 export const APP_DESCRIPTION = 'Enterprise Cybersecurity Education & Assessment Platform';
 
 // ===== ROLES =====
@@ -280,7 +280,7 @@ export const RESOURCE_PROVIDERS = [
   { id: 'thm', name: 'TryHackMe', url: 'https://tryhackme.com' },
   { id: 'htb', name: 'Hack The Box Academy', url: 'https://academy.hackthebox.com' },
   { id: 'overthewire', name: 'OverTheWire', url: 'https://overthewire.org' },
-  { id: 'portswigger', name: 'PortSwigger Academy', url: 'https://portswigger.net/web-security' },
+  { id: 'cybernex', name: 'CyberNex Academy', url: '/student/learning/sql-injection' },
   { id: 'owasp', name: 'OWASP', url: 'https://owasp.org' },
   { id: 'microsoft', name: 'Microsoft Learn', url: 'https://learn.microsoft.com' },
   { id: 'google', name: 'Google Cybersecurity', url: 'https://cybersecurity.google' },
@@ -805,6 +805,270 @@ export const SAMPLE_LABS = [
         flag: 'CYBERNEX{admin:P@ssw0rd123}'
       }
     ]
+  },
+  {
+    id: 'SQLI-HIDDEN-DATA',
+    title: 'SQL injection vulnerability in WHERE clause allowing retrieval of hidden data',
+    domain: 'Web Security',
+    category: 'SQL Injection',
+    difficulty: 'Easy',
+    estimatedTime: 25,
+    description: 'This lab contains a SQL injection vulnerability in the product category filter. The task is to display one or more unreleased products using a malicious category value.',
+    objectives: [
+      'Intercept the category request in Burp Suite',
+      'Inject a payload into the category parameter',
+      'Confirm that unreleased products are returned',
+      'Complete the challenge in the CyberNex lab environment'
+    ],
+    prerequisites: ['Basic SQL knowledge', 'Burp Suite basics'],
+    environment: 'Web Browser + Burp Suite',
+    accessUrl: '/student/practice',
+    burpSuiteUrl: '/student/learning/sql-injection',
+    instructions: 'Use Burp Suite to intercept and modify the request that sets the product category filter. Change the category parameter to the value \' +OR+1=1-- \' and submit the request to reveal unreleased products.',
+    solutionSteps: [
+      'Intercept the request that sets the category filter.',
+      'Modify the category parameter to \' +OR+1=1--\'.',
+      'Submit the request and confirm that unreleased products appear in the response.'
+    ],
+    tasks: [
+      {
+        id: 1,
+        title: 'Intercept the category request',
+        description: 'Turn on intercept in Burp Suite and locate the category filter request.',
+        hint: 'The vulnerable parameter is the category value in the product list request.',
+        flag: 'SQLI-RETRIEVE-HIDDEN-DATA'
+      },
+      {
+        id: 2,
+        title: 'Inject an OR condition',
+        description: 'Change the category parameter to the payload used to bypass the released filter.',
+        hint: 'Use the payload: \' OR 1=1--',
+        flag: 'SQLI-OR-1-1'
+      },
+      {
+        id: 3,
+        title: 'Confirm the exploit',
+        description: 'Verify the response now includes unreleased products.',
+        hint: 'Look for products that should normally be hidden.',
+        flag: 'SQLI-DISCOVERED-UNRELEASED'
+      }
+    ]
+  },
+  {
+    id: 'SQLI-LOGIN-BYPASS',
+    title: 'SQL injection vulnerability allowing login bypass',
+    domain: 'Web Security',
+    category: 'SQL Injection',
+    difficulty: 'Easy',
+    estimatedTime: 20,
+    description: 'This lab demonstrates a SQL injection vulnerability in the login function that permits authentication bypass via the username parameter.',
+    objectives: [
+      'Intercept the login request',
+      'Inject a malicious username',
+      'Log in as administrator without a password'
+    ],
+    prerequisites: ['Burp Suite', 'SQL basics'],
+    environment: 'Web Browser + Burp Suite',
+    accessUrl: '/student/practice',
+    burpSuiteUrl: '/student/learning/sql-injection',
+    instructions: 'Intercept the login request and change the username parameter to administrator\'--. Submit the request to bypass the password check and log in as the administrator user.',
+    solutionSteps: [
+      'Intercept and alter the login request in Burp.',
+      'Set the username to administrator\'--.',
+      'Submit the request and verify that the application logs you in as the administrator user.'
+    ],
+    tasks: [
+      {
+        id: 1,
+        title: 'Modify the login request',
+        description: 'Intercept the login request and alter the username field.',
+        hint: 'The payload is administrator\'--.',
+        flag: 'SQLI-LOGIN-BYPASS'
+      },
+      {
+        id: 2,
+        title: 'Bypass authentication',
+        description: 'Submit the modified request and confirm the login works as the administrator.',
+        hint: 'The password filter is neutralized by the injected comment sequence.',
+        flag: 'ADMIN-ACCESS-GRANTED'
+      }
+    ]
+  },
+  {
+    id: 'SQLI-DB-VERSION-ORACLE',
+    title: 'SQL injection attack, querying the database type and version on Oracle',
+    domain: 'Web Security',
+    category: 'SQL Injection',
+    difficulty: 'Medium',
+    estimatedTime: 35,
+    description: 'Use a UNION attack to determine the database type and display the Oracle version string.',
+    objectives: [
+      'Determine the number of columns in the original query',
+      'Find a text-compatible column',
+      'Display the Oracle banner via a UNION attack'
+    ],
+    prerequisites: ['UNION attacks', 'Oracle syntax'],
+    environment: 'Web Browser + Burp Suite',
+    accessUrl: '/student/practice',
+    burpSuiteUrl: '/student/learning/sql-injection',
+    instructions: 'Determine the column count and find a text field, then use a UNION SELECT payload with FROM dual to query the Oracle database version string. Example: \' UNION SELECT BANNER, NULL FROM v$version--',
+    solutionSteps: [
+      'Use a UNION SELECT test to confirm that the query returns two text columns.',
+      'Query the version banner with BANNER and NULL from v$version.',
+      'Submit the final payload to display the database version string.'
+    ],
+    tasks: [
+      {
+        id: 1,
+        title: 'Identify the column structure',
+        description: 'Determine how many columns the application query returns.',
+        hint: 'Use UNION SELECT NULL values until the query succeeds.',
+        flag: 'SQLI-ORACLE-COLUMNS-OK'
+      },
+      {
+        id: 2,
+        title: 'Display the database version',
+        description: 'Use Oracle syntax to query the version banner.',
+        hint: 'Use BANNER and the dual table.',
+        flag: 'ORACLE-VERSION-DISCOVERED'
+      }
+    ]
+  },
+  {
+    id: 'SQLI-DB-VERSION-MYSQL',
+    title: 'SQL injection attack, querying the database type and version on MySQL and Microsoft',
+    domain: 'Web Security',
+    category: 'SQL Injection',
+    difficulty: 'Medium',
+    estimatedTime: 30,
+    description: 'Use a UNION attack to return the database version for MySQL or Microsoft SQL Server.',
+    objectives: [
+      'Confirm the query has two compatible text columns',
+      'Use @@version to reveal the database version',
+      'Capture the output and complete the challenge'
+    ],
+    prerequisites: ['UNION attacks', 'SQL syntax'],
+    environment: 'Web Browser + Burp Suite',
+    accessUrl: '/student/practice',
+    burpSuiteUrl: '/student/learning/sql-injection',
+    instructions: 'Use UNION SELECT to test the number of columns and display the database version with @@version. For MySQL this often looks like \' UNION SELECT @@version, NULL#.',
+    solutionSteps: [
+      'Confirm the original query returns two text-compatible columns.',
+      'Inject a UNION SELECT payload that includes @@version.',
+      'Submit the request and review the application response for the version information.'
+    ],
+    tasks: [
+      {
+        id: 1,
+        title: 'Verify the result set',
+        description: 'Use a UNION test with a dummy string and NULL values to confirm the response format.',
+        hint: 'The payload looks like \' UNION SELECT \'abc\',\'def\'#',
+        flag: 'SQLI-MYSQL-COLUMNS-OK'
+      },
+      {
+        id: 2,
+        title: 'Display version information',
+        description: 'Use @@version in the UNION payload to expose database details.',
+        hint: 'The payload is \' UNION SELECT @@version, NULL#',
+        flag: 'DB-VERSION-REVEALED'
+      }
+    ]
+  },
+  {
+    id: 'SQLI-LIST-NON-ORACLE',
+    title: 'SQL injection attack, listing the database contents on non-Oracle databases',
+    domain: 'Web Security',
+    category: 'SQL Injection',
+    difficulty: 'Hard',
+    estimatedTime: 50,
+    description: 'Use a UNION attack to enumerate database tables, inspect the users table, and retrieve all usernames and passwords.',
+    objectives: [
+      'List available database tables',
+      'Examine the users table columns',
+      'Retrieve credentials and log in as administrator'
+    ],
+    prerequisites: ['UNION attacks', 'information_schema'],
+    environment: 'Web Browser + Burp Suite',
+    accessUrl: '/student/practice',
+    burpSuiteUrl: '/student/learning/sql-injection',
+    instructions: 'Confirm the query columns, then query information_schema.tables and information_schema.columns to locate the credentials table and retrieve the usernames and passwords. Use the administrator password to sign in.',
+    solutionSteps: [
+      'Confirm the query returns two text columns.',
+      'List tables with UNION SELECT table_name, NULL FROM information_schema.tables.',
+      'Find the credentials table and inspect its columns with information_schema.columns.',
+      'Query the usernames and passwords and log in as administrator.'
+    ],
+    tasks: [
+      {
+        id: 1,
+        title: 'Enumerate tables',
+        description: 'Query the database metadata to identify the user credential table.',
+        hint: 'Use information_schema.tables.',
+        flag: 'TABLES-ENUMERATED'
+      },
+      {
+        id: 2,
+        title: 'Find the credentials columns',
+        description: 'Determine the column names inside the user table.',
+        hint: 'Search for the table with usernames and passwords.',
+        flag: 'USER-COLUMNS-FOUND'
+      },
+      {
+        id: 3,
+        title: 'Dump the credentials',
+        description: 'Retrieve the username and password values and log in as administrator.',
+        hint: 'Use UNION SELECT username_abcdef, password_abcdef FROM users_abcdef--.',
+        flag: 'ADMIN-LOGGED-IN'
+      }
+    ]
+  },
+  {
+    id: 'SQLI-LIST-ORACLE',
+    title: 'SQL injection attack, listing the database contents on Oracle',
+    domain: 'Web Security',
+    category: 'SQL Injection',
+    difficulty: 'Hard',
+    estimatedTime: 50,
+    description: 'Use a UNION attack against an Oracle database to read table names, inspect the relevant columns, and recover the administrator credentials.',
+    objectives: [
+      'Confirm the result set shape',
+      'List Oracle tables and columns',
+      'Extract the administrator password and log in'
+    ],
+    prerequisites: ['Oracle syntax', 'UNION attacks'],
+    environment: 'Web Browser + Burp Suite',
+    accessUrl: '/student/practice',
+    burpSuiteUrl: '/student/learning/sql-injection',
+    instructions: 'Use a UNION SELECT with FROM dual to confirm the column structure, then query all_tables and all_tab_columns to locate the user table and its credential fields. Finally, dump the usernames and passwords and log in as the administrator.',
+    solutionSteps: [
+      'Use a UNION SELECT test payload with FROM dual to confirm the number of columns.',
+      'Query all_tables to identify the credentials table.',
+      'Use all_tab_columns to inspect the relevant columns.',
+      'Select the username and password fields from the discovered table and log in as administrator.'
+    ],
+    tasks: [
+      {
+        id: 1,
+        title: 'Confirm Oracle column structure',
+        description: 'Use a UNION query that includes FROM dual to validate the output format.',
+        hint: 'Relevant format: \' UNION SELECT \'abc\',\'def\' FROM dual--',
+        flag: 'ORACLE-COLUMNS-OK'
+      },
+      {
+        id: 2,
+        title: 'Find the table and columns',
+        description: 'Use all_tables and all_tab_columns to locate the credential table.',
+        hint: 'Look for the table that stores usernames and passwords.',
+        flag: 'ORACLE-USER-TABLE-FOUND'
+      },
+      {
+        id: 3,
+        title: 'Retrieve the admin password',
+        description: 'Dump the valid table values and use the administrator credentials to login.',
+        hint: 'Select username and password columns from the discovered table and find administrator.',
+        flag: 'ORACLE-ADMIN-PASSWORD-RETRIEVED'
+      }
+    ]
   }
 ];
 
@@ -986,6 +1250,102 @@ export const SAMPLE_COURSES = [
       'Network troubleshooting'
     ],
     modules: []
+  },
+  {
+    id: 'COURSE-SQLI-001',
+    title: 'SQL Injection Fundamentals',
+    description: 'Learn how SQL injection works, how to detect it, and how to prevent it with safe database coding patterns.',
+    domain: 'Web Security',
+    level: 3,
+    difficulty: DIFFICULTY_LEVELS.INTERMEDIATE,
+    estimatedTime: 150,
+    isPublished: true,
+    prerequisites: ['Computer Fundamentals'],
+    learningObjectives: [
+      'Define SQL injection and explain why it is dangerous.',
+      'Recognize common payload patterns and injection entry points.',
+      'Differentiate between UNION, blind, and time-based SQLi.',
+      'Use parameterized queries to prevent SQL injection in applications.'
+    ],
+    modules: [
+      {
+        id: 'MOD-SQLI-001',
+        title: 'What is SQL injection?',
+        lessons: [
+          {
+            id: 'LESSON-SQLI-001',
+            title: 'Understanding SQL injection',
+            description: 'An introduction to how user input is turned into a harmful database query.',
+            content: 'SQL injection occurs when untrusted input is inserted into a SQL query without proper validation or prepared statements. Attackers can modify the logic of the query to bypass authentication or read sensitive data.',
+            estimatedTime: 20,
+            resources: [
+              { type: 'internal', title: 'SQLi overview notes', url: '/resources/sqli-overview.pdf' },
+              { type: 'internal', provider: 'CyberNex', title: 'SQL injection overview', url: '/student/learning/sql-injection' }
+            ],
+            completionStatus: false
+          },
+          {
+            id: 'LESSON-SQLI-002',
+            title: 'Impact and detection',
+            description: 'Why SQL injection can lead to data theft, privilege escalation, and application compromise.',
+            content: 'The impact may include exposing passwords, credit card data, user records, or backend infrastructure. Detection typically starts with single quote tests and boolean payloads such as OR 1=1 and OR 1=2.',
+            estimatedTime: 25,
+            resources: [],
+            completionStatus: false
+          }
+        ]
+      },
+      {
+        id: 'MOD-SQLI-002',
+        title: 'Classic and advanced exploitation',
+        lessons: [
+          {
+            id: 'LESSON-SQLI-003',
+            title: 'Retrieving hidden data and login bypass',
+            description: 'How attackers can extract hidden records or bypass authentication logic.',
+            content: "Payloads like OR 1=1-- can reveal all products or bypass login logic. For example, administrator'-- removes the password check from a WHERE clause.",
+            estimatedTime: 30,
+            resources: [],
+            completionStatus: false
+          },
+          {
+            id: 'LESSON-SQLI-004',
+            title: 'UNION attacks and blind SQLi',
+            description: 'How to combine SELECT statements and infer true/false conditions without seeing query results.',
+            content: 'A UNION attack appends a second query with matching column counts. Blind SQL injection relies on conditional errors, time delays, or out-of-band DNS interactions to infer the result of a boolean expression.',
+            estimatedTime: 35,
+            resources: [],
+            completionStatus: false
+          }
+        ]
+      },
+      {
+        id: 'MOD-SQLI-003',
+        title: 'Prevention and secure coding',
+        lessons: [
+          {
+            id: 'LESSON-SQLI-005',
+            title: 'Prepared statements',
+            description: 'The most important defense against SQL injection.',
+            content: 'Prepared statements bind user input as data rather than executable SQL. This prevents attackers from altering the structure of the query while still allowing dynamic values to be used safely.',
+            estimatedTime: 20,
+            resources: [
+              { type: 'external', provider: 'OWASP', title: 'SQL Injection Prevention Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html' }
+            ],
+            completionStatus: false
+          },
+          {
+            id: 'LESSON-SQLI-006',
+            title: 'Study summary and checklist',
+            description: 'Review the core concepts and test yourself on the main SQLi patterns.',
+            content: 'Remember: validate user input, use parameterized queries, and avoid building SQL dynamically from user-controlled values. The safest design pattern is to treat all input as data, never as query structure.',
+            estimatedTime: 20,
+            resources: [],
+            completionStatus: false
+          }
+        ]
+      }
+    ]
   }
 ];
 

@@ -21,6 +21,7 @@ const Card = ({
   padding = 'md',
   onClick,
   hoverable = false,
+  as: Component = 'div',
   ...props
 }) => {
   const { isDarkMode } = useTheme();
@@ -56,13 +57,13 @@ const Card = ({
       'hover:shadow-md cursor-pointer') : '';
 
   return (
-    <div
+    <Component
       className={`${baseClasses} ${variantClasses[variant]} ${paddingClasses[padding]} ${hoverClasses} ${className}`}
       onClick={onClick}
       {...props}
     >
       {children}
-    </div>
+    </Component>
   );
 };
 

@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
 import { useCountdown } from '../../hooks/useCountdown';
+import { selectQuestionsForStudent, getEffectivePolicy, getQuestionPool } from '../../utils/assessmentPool';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
@@ -49,15 +50,11 @@ const AssessmentTaking = () => {
     if (foundAssessment) {
       setAssessment(foundAssessment);
       
-      // For demo purposes, use sample questions or generate questions from assessment data
-      if (foundAssessment.questions && foundAssessment.questions.length > 0) {
-        setQuestions(foundAssessment.questions);
-      } else {
-        // Generate sample questions based on assessment type
-        const sampleQuestions = generateSampleQuestions(foundAssessment);
-        setQuestions(sampleQuestions);
-      }
-      
+      const livePolicy = getEffectivePolicy(foundAssessment, user?.id);
+      const selectedQuestions = selectQuestionsForStudent(foundAssessment, user?.id, { forceReshuffle: false });
+      const poolQuestions = selectedQuestions.length ? selectedQuestions : getQuestionPool(foundAssessment);
+      setQuestions(poolQuestions.slice(0, Math.min(livePolicy.questionsPerAttempt || poolQuestions.length, poolQuestions.length)));
+
       // Check if there's an existing in-progress result
       const existingResult = filteredResults.find(r => 
         r.studentId === user?.id && 
@@ -77,9 +74,9 @@ const AssessmentTaking = () => {
     }
   }, [assessmentId, filteredAssessments, filteredResults, user, navigate]);
 
-  // Initialize countdown timer
+  const effectivePolicy = assessment && user ? getEffectivePolicy(assessment, user.id) : { timeLimit: assessment?.duration || 60, questionsPerAttempt: 5, maxViolations: 3, fullScreenRequired: true };
   const accessGrant = assessment && user ? getAssessmentAccessForStudent(assessment.id, user.id) : null;
-  const assessmentDuration = accessGrant?.durationOverride || assessment?.duration || 60; // minutes
+  const assessmentDuration = effectivePolicy.timeLimit || accessGrant?.durationOverride || assessment?.duration || 60; // minutes
   const { 
     formattedTime, 
     isRunning, 
@@ -115,21 +112,38 @@ const AssessmentTaking = () => {
 
   useEffect(() => {
     if (!assessment) return undefined;
+
     const onVisibility = () => { if (document.hidden) recordViolation('TAB_SWITCH'); };
     const onBlur = () => recordViolation('WINDOW_BLUR');
     const onCopy = () => recordViolation('COPY_ATTEMPT');
     const onPaste = () => recordViolation('PASTE_ATTEMPT');
+    const onFullscreenChange = () => {
+      if (effectivePolicy.fullScreenRequired && !document.fullscreenElement) {
+        recordViolation('FULLSCREEN_EXIT');
+      }
+    };
+
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('blur', onBlur);
     document.addEventListener('copy', onCopy);
     document.addEventListener('paste', onPaste);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    if (effectivePolicy.fullScreenRequired && !document.fullscreenElement) {
+      const root = document.documentElement;
+      if (root.requestFullscreen) {
+        root.requestFullscreen().catch(() => undefined);
+      }
+    }
+
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('copy', onCopy);
       document.removeEventListener('paste', onPaste);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
     };
-  }, [assessment, recordViolation]);
+  }, [assessment, effectivePolicy.fullScreenRequired, recordViolation]);
 
   // Handle pausing/unpausing
   useEffect(() => {
@@ -310,6 +324,13 @@ const AssessmentTaking = () => {
   const handleSubmit = () => {
     setShowConfirmation(true);
   };
+
+  useEffect(() => {
+    if (!assessment || !effectivePolicy.maxViolations || isSubmitting) return;
+    if (violationCount >= effectivePolicy.maxViolations) {
+      setShowConfirmation(true);
+    }
+  }, [assessment, effectivePolicy.maxViolations, violationCount, isSubmitting]);
 
   const confirmSubmit = async () => {
     setShowConfirmation(false);

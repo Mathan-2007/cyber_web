@@ -99,37 +99,6 @@ const LessonViewer = ({
           </div>
         )}
 
-        {/* Navigation Controls */}
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              onClick={onPrevious}
-              disabled={!hasPrevious}
-              startIcon={<ArrowLeft size={16} />}
-            >
-              Previous
-            </Button>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 dark:text-gray-300">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
-            <ProgressBar value={progressPercentage} max={100} className="w-48 h-2" />
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="primary" 
-              onClick={onNext}
-              disabled={!hasNext}
-              endIcon={<ArrowRight size={16} />}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
       </div>
     </Card>
   );

@@ -82,6 +82,12 @@ export const ASSESSMENT_PERMISSIONS = {
   SET_LEVEL: 'assessment.set_level',
   SCHEDULE: 'assessment.schedule',
   ASSIGN_STUDENTS: 'assessment.assign_students',
+  MANAGE_QUESTION_POOL: 'assessment.manage_question_pool',
+  CONTROL_SESSION: 'assessment.control_session',
+  SET_GLOBAL_POLICY: 'assessment.set_global_policy',
+  OVERRIDE_TIME: 'assessment.override_time',
+  OVERRIDE_VIOLATIONS: 'assessment.override_violations',
+  OVERRIDE_FULLSCREEN: 'assessment.override_fullscreen',
 };
 
 // ===== RESULT PERMISSIONS =====

@@ -28,7 +28,9 @@ import {
   ArrowRight,
   X,
   CheckSquare,
-  Square
+  Square,
+  ExternalLink,
+  BookOpen
 } from 'lucide-react';
 
 const PracticeLabDetail = () => {
@@ -206,6 +208,12 @@ const PracticeLabDetail = () => {
     return result.join(' ');
   };
 
+  const labAccessUrl = lab?.accessUrl || lab?.labUrl || lab?.externalUrl || lab?.url || '/student/practice';
+  const burpSuiteUrl = lab?.burpSuiteUrl || '/student/learning/sql-injection';
+  const isInternalPath = (value) => !!value && (value.startsWith('/') || value.startsWith('#'));
+  const labAccessRoute = isInternalPath(labAccessUrl) ? labAccessUrl : '/student/practice';
+  const burpSuiteRoute = isInternalPath(burpSuiteUrl) ? burpSuiteUrl : '/student/learning/sql-injection';
+
   if (isLoading || !lab) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -381,10 +389,23 @@ const PracticeLabDetail = () => {
 
             {/* Tab Content */}
             {activeTab === 'instructions' && (
-              <LabInstructions 
-                instructions={lab.instructions || 'Complete the lab objectives as described. Follow the tasks in order and use the terminal to execute commands. Submit the flag when you are done.'}
-                objectives={lab.objectives || ['Understand the security challenge', 'Use appropriate tools and techniques', 'Capture the flag']}
-              />
+              <>
+                <LabInstructions 
+                  instructions={lab.instructions || 'Complete the lab objectives as described. Follow the tasks in order and use the terminal to execute commands. Submit the flag when you are done.'}
+                  objectives={lab.objectives || ['Understand the security challenge', 'Use appropriate tools and techniques', 'Capture the flag']}
+                />
+
+                {lab.solutionSteps && lab.solutionSteps.length > 0 && (
+                  <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Walkthrough</h3>
+                    <ol className="space-y-3 list-decimal list-inside text-sm text-gray-700 dark:text-gray-300">
+                      {lab.solutionSteps.map((step, index) => (
+                        <li key={index}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </>
             )}
 
             {activeTab === 'terminal' && (
@@ -448,8 +469,22 @@ const PracticeLabDetail = () => {
         <div className="lg:col-span-1 space-y-6">
           {/* Lab Information */}
           <Card>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Lab Information</h3>
-            <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Lab access</h3>
+            <div className="space-y-3">
+              {labAccessRoute && (
+                <Link to={labAccessRoute} className="block">
+                  <Button variant="primary" className="w-full" startIcon={<ExternalLink size={16} />}>
+                    Access the lab
+                  </Button>
+                </Link>
+              )}
+              <Link to={burpSuiteRoute} className="block">
+                <Button variant="outline" className="w-full" startIcon={<Shield size={16} />}>
+                  Open Burp Suite
+                </Button>
+              </Link>
+            </div>
+            <div className="space-y-4 mt-6">
               <div className="flex items-center gap-3">
                 <FileText size={18} className="text-gray-500" />
                 <span className="text-sm text-gray-600 dark:text-gray-300">
@@ -542,7 +577,7 @@ const PracticeLabDetail = () => {
           {/* Lab Actions */}
           <Card>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Actions</h3>
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               {completionStatus === 'not-started' ? (
                 <Button onClick={startLab} variant="primary" className="w-full" startIcon={<PlayCircle size={16} />}>
                   Start Lab
@@ -561,8 +596,8 @@ const PracticeLabDetail = () => {
                   Review Lab
                 </Button>
               )}
-              
-              <Link to="/student/practice">
+
+              <Link to="/student/practice" className="block">
                 <Button variant="outline" className="w-full" startIcon={<ArrowLeft size={16} />}>
                   Back to Labs
                 </Button>

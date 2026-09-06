@@ -137,7 +137,7 @@ const FacultyPractice = () => {
       header: 'Actions',
       accessor: 'actions',
       render: (lab) => (
-        <div className="flex gap-2">
+        <div className="flex gap-2 space-y-6">
           <Link to={`/student/practice/${lab.id}`}>
             <Button variant="outline" size="sm" startIcon={<Eye size={14} />}>
               View
@@ -304,7 +304,7 @@ const FacultyPractice = () => {
       </Card>
 
       <Card>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 space-y-6">
           Quick Actions
         </h3>
         <div className="flex flex-wrap gap-2">
