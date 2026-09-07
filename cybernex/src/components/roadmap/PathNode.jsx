@@ -3,7 +3,13 @@ import { Link } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CheckCircle2, Lock, PlayCircle, ArrowRight, Clock } from 'lucide-react';
 import ProgressBar from '../common/ProgressBar';
-import { ROADMAP_STATES } from '../../data/roadmapConfig';
+
+const ROADMAP_STATES = {
+  LOCKED: 'locked',
+  AVAILABLE: 'available',
+  IN_PROGRESS: 'in-progress',
+  COMPLETED: 'completed',
+};
 
 const countModulesLessons = (course) => {
   if (!course) return null;

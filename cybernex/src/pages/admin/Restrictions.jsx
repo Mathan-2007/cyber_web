@@ -1,267 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import React, { useMemo, useState } from 'react';
 import { useData } from '../../contexts/DataContext';
-import { usePermissions } from '../../hooks/usePermissions';
-import { RESTRICTION_TYPES, RESTRICTION_SEVERITY, ROLES } from '../../utils/constants';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import Badge from '../../components/common/Badge';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import DataTable from '../../components/common/DataTable';
-import SearchBar from '../../components/common/SearchBar';
-import ConfirmationModal from '../../components/common/ConfirmationModal';
-import { Plus, Edit2, Trash2, Eye, ShieldAlert, Clock, Calendar, User, AlertTriangle, CheckCircle, X, Filter, Search } from 'lucide-react';
+import { ShieldAlert, Lock, EyeOff, CopyX, MonitorSmartphone, TimerReset, FolderLock, CheckCircle, Users, SlidersHorizontal } from 'lucide-react';
+
+const defaultSecuritySettings = {
+  blockFileDownload: true,
+  blockCopyPaste: true,
+  strictEnvironment: true,
+  webcamRequired: false,
+  strikeLimit: 3,
+  fallbackTimer: 15,
+  allowAccessWithoutBrowser: false,
+  examLock: true,
+};
 
 const Restrictions = () => {
-  const { user } = useAuth();
-  const { restrictions, users: allUsers, isLoading } = useData();
-  const { hasPermission } = usePermissions();
-  
-  const [filteredRestrictions, setFilteredRestrictions] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('all');
-  const [filterSeverity, setFilterSeverity] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedRestriction, setSelectedRestriction] = useState(null);
-  const [stats, setStats] = useState({
-    total: 0,
-    active: 0,
-    expired: 0,
-    byType: {}
-  });
+  const { courses, isLoading } = useData();
+  const [selectedCourseId, setSelectedCourseId] = useState('all');
+  const [policy, setPolicy] = useState(defaultSecuritySettings);
 
-  useEffect(() => {
-    if (restrictions.length > 0) {
-      setFilteredRestrictions(restrictions);
-      
-      const active = restrictions.filter(r => {
-        if (r.expiresAt) {
-          return new Date(r.expiresAt) > new Date();
-        }
-        return true; // No expiry date means active
-      }).length;
-      
-      const expired = restrictions.filter(r => {
-        return r.expiresAt && new Date(r.expiresAt) <= new Date();
-      }).length;
-      
-      // Count by type
-      const byType = {};
-      restrictions.forEach(r => {
-        byType[r.type] = (byType[r.type] || 0) + 1;
-      });
-      
-      setStats({
-        total: restrictions.length,
-        active,
-        expired,
-        byType
-      });
-    }
-  }, [restrictions]);
+  const courseOptions = useMemo(() => {
+    const list = courses?.length ? courses : [];
+    return [{ id: 'all', name: 'All Courses' }, ...list];
+  }, [courses]);
 
-  useEffect(() => {
-    let filtered = [...restrictions];
-    
-    // Filter by search
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      filtered = filtered.filter(r => {
-        const user = allUsers.find(u => u.id === r.userId);
-        return (
-          (r.type || '').toLowerCase().includes(lowerQuery) ||
-          (r.reason || '').toLowerCase().includes(lowerQuery) ||
-          (user?.name || '').toLowerCase().includes(lowerQuery) ||
-          (user?.email || '').toLowerCase().includes(lowerQuery) ||
-          r.id.toLowerCase().includes(lowerQuery)
-        );
-      });
-    }
-    
-    // Filter by type
-    if (filterType !== 'all') {
-      filtered = filtered.filter(r => r.type === filterType);
-    }
-    
-    // Filter by severity
-    if (filterSeverity !== 'all') {
-      filtered = filtered.filter(r => r.severity === filterSeverity);
-    }
-    
-    // Filter by status
-    if (filterStatus !== 'all') {
-      if (filterStatus === 'active') {
-        filtered = filtered.filter(r => {
-          if (r.expiresAt) {
-            return new Date(r.expiresAt) > new Date();
-          }
-          return true;
-        });
-      } else if (filterStatus === 'expired') {
-        filtered = filtered.filter(r => {
-          return r.expiresAt && new Date(r.expiresAt) <= new Date();
-        });
-      }
-    }
-    
-    // Sort by created date (newest first)
-    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
-    setFilteredRestrictions(filtered);
-  }, [searchQuery, filterType, filterSeverity, filterStatus, restrictions, allUsers]);
+  const selectedCourse = courseOptions.find((course) => course.id === selectedCourseId) || courseOptions[0];
 
-  const handleDelete = (restriction) => {
-    setSelectedRestriction(restriction);
-    setShowDeleteModal(true);
+  const updatePolicy = (key, value) => {
+    setPolicy((current) => ({ ...current, [key]: value }));
   };
-
-  const confirmDelete = async () => {
-    if (!selectedRestriction) return;
-    
-    try {
-      // In a real app, this would call a service to delete the restriction
-      // For now, we'll just close the modal
-      setShowDeleteModal(false);
-      setSelectedRestriction(null);
-    } catch (error) {
-      console.error('Error deleting restriction:', error);
-    }
-  };
-
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case RESTRICTION_SEVERITY.CRITICAL: return 'bg-red-100 text-red-800';
-      case RESTRICTION_SEVERITY.HIGH: return 'bg-orange-100 text-orange-800';
-      case RESTRICTION_SEVERITY.MEDIUM: return 'bg-yellow-100 text-yellow-800';
-      case RESTRICTION_SEVERITY.LOW: return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusColor = (restriction) => {
-    if (restriction.expiresAt && new Date(restriction.expiresAt) <= new Date()) {
-      return 'bg-gray-100 text-gray-800';
-    }
-    return 'bg-green-100 text-green-800';
-  };
-
-  const getStatusText = (restriction) => {
-    if (restriction.expiresAt && new Date(restriction.expiresAt) <= new Date()) {
-      return 'Expired';
-    }
-    return 'Active';
-  };
-
-  const columns = [
-    {
-      header: 'User',
-      accessor: 'userId',
-      render: (row) => {
-        const user = allUsers.find(u => u.id === row.userId);
-        return (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-sm font-bold">
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
-            </div>
-            <div>
-              <div className="font-medium text-gray-900 dark:text-white">
-                {user?.name || row.userId}
-              </div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">
-                {user?.email || ''}
-              </div>
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Type',
-      accessor: 'type',
-      render: (row) => (
-        <Badge className="bg-purple-100 text-purple-800">
-          {row.type.replace('_', ' ')}
-        </Badge>
-      )
-    },
-    {
-      header: 'Severity',
-      accessor: 'severity',
-      render: (row) => (
-        <Badge className={getSeverityColor(row.severity || RESTRICTION_SEVERITY.MEDIUM)}>
-          {row.severity || RESTRICTION_SEVERITY.MEDIUM}
-        </Badge>
-      )
-    },
-    {
-      header: 'Reason',
-      accessor: 'reason',
-      render: (row) => (
-        <div className="max-w-40 truncate text-sm">
-          {row.reason || 'No reason provided'}
-        </div>
-      )
-    },
-    {
-      header: 'Status',
-      accessor: 'status',
-      render: (row) => (
-        <Badge className={getStatusColor(row)}>
-          {getStatusText(row)}
-        </Badge>
-      )
-    },
-    {
-      header: 'Created',
-      accessor: 'createdAt',
-      render: (row) => (
-        <div className="text-sm text-gray-600 dark:text-gray-300">
-          {new Date(row.createdAt).toLocaleDateString()}
-          <br />
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            {new Date(row.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        </div>
-      )
-    },
-    {
-      header: 'Expires',
-      accessor: 'expiresAt',
-      render: (row) => (
-        <div className="text-sm text-gray-600 dark:text-gray-300">
-          {row.expiresAt 
-            ? new Date(row.expiresAt).toLocaleDateString()
-            : 'Never'}
-        </div>
-      )
-    },
-    {
-      header: 'Actions',
-      accessor: 'actions',
-      render: (row) => (
-        <div className="flex gap-2">
-          <Link to={`/admin/restrictions/${row.id}/edit`}>
-            <Button variant="outline" size="sm" startIcon={<Edit2 size={14} />}>
-              Edit
-            </Button>
-          </Link>
-          {hasPermission('restrictions.manage') && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              startIcon={<Trash2 size={14} />} 
-              onClick={() => handleDelete(row)}
-              className="text-red-600 hover:text-red-700"
-            >
-              Delete
-            </Button>
-          )}
-        </div>
-      )
-    }
-  ];
 
   if (isLoading) {
     return (
@@ -273,144 +42,144 @@ const Restrictions = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Access Restrictions</h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Manage user access restrictions and penalties</p>
-        </div>
-        
-        {hasPermission('restrictions.manage') && (
-          <Link to="/admin/restrictions/new">
-            <Button variant="primary" startIcon={<Plus size={18} />}>
-              Add Restriction
-            </Button>
-          </Link>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Security Management</h1>
+        <p className="text-gray-600 dark:text-gray-300 mt-1">Control evaluation security, anti-cheat barriers, and exam access conditions by course.</p>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="text-center">
           <ShieldAlert size={24} className="mx-auto mb-2 text-red-600" />
-          <div className="text-xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">Total Restrictions</div>
+          <div className="text-xl font-bold text-gray-900 dark:text-white">{courseOptions.length - 1}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-300">Courses</div>
         </Card>
         <Card className="text-center">
-          <CheckCircle size={24} className="mx-auto mb-2 text-green-600" />
-          <div className="text-xl font-bold text-gray-900 dark:text-white">{stats.active}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">Active</div>
+          <Lock size={24} className="mx-auto mb-2 text-orange-600" />
+          <div className="text-xl font-bold text-gray-900 dark:text-white">{policy.blockCopyPaste ? 'On' : 'Off'}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-300">Copy/Paste Lock</div>
         </Card>
         <Card className="text-center">
-          <X size={24} className="mx-auto mb-2 text-gray-600" />
-          <div className="text-xl font-bold text-gray-900 dark:text-white">{stats.expired}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">Expired</div>
+          <TimerReset size={24} className="mx-auto mb-2 text-blue-600" />
+          <div className="text-xl font-bold text-gray-900 dark:text-white">{policy.fallbackTimer}s</div>
+          <div className="text-sm text-gray-600 dark:text-gray-300">Fallback Timer</div>
         </Card>
         <Card className="text-center">
-          <AlertTriangle size={24} className="mx-auto mb-2 text-orange-600" />
-          <div className="text-xl font-bold text-gray-900 dark:text-white">{Object.keys(stats.byType).length}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">Restriction Types</div>
-        </Card>
-        <Card className="text-center">
-          <Calendar size={24} className="mx-auto mb-2 text-blue-600" />
-          <div className="text-xl font-bold text-gray-900 dark:text-white">0</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">Expiring Soon</div>
-        </Card>
-        <Card className="text-center">
-          <Clock size={24} className="mx-auto mb-2 text-purple-600" />
-          <div className="text-xl font-bold text-gray-900 dark:text-white">0</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">Permanent</div>
+          <Users size={24} className="mx-auto mb-2 text-emerald-600" />
+          <div className="text-xl font-bold text-gray-900 dark:text-white">{policy.strikeLimit}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-300">Strike Limit</div>
         </Card>
       </div>
 
-      {/* Search and Filters */}
       <Card>
-        <div className="flex gap-4 flex-wrap items-center">
-          <SearchBar
-            placeholder="Search restrictions by user, type, or reason..."
-            value={searchQuery}
-            onChange={setSearchQuery}
-            className="flex-1 min-w-[250px]"
-          />
-          
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Type:</span>
+        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+          <div className="flex-1 w-full">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Course</label>
             <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="select select-primary select-sm"
+              value={selectedCourseId}
+              onChange={(event) => setSelectedCourseId(event.target.value)}
+              className="select select-primary w-full"
             >
-              <option value="all">All Types</option>
-              {Object.entries(RESTRICTION_TYPES).map(([key, value]) => (
-                <option key={key} value={key}>{value}</option>
+              {courseOptions.map((course) => (
+                <option key={course.id} value={course.id}>{course.name}</option>
               ))}
             </select>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Severity:</span>
-            <select
-              value={filterSeverity}
-              onChange={(e) => setFilterSeverity(e.target.value)}
-              className="select select-primary select-sm"
-            >
-              <option value="all">All Severities</option>
-              {Object.entries(RESTRICTION_SEVERITY).map(([key, value]) => (
-                <option key={key} value={key}>{value}</option>
-              ))}
-            </select>
+          <div className="w-full lg:w-auto">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              Current policy: {selectedCourse?.name || 'All Courses'}
+            </div>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Status:</span>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="select select-primary select-sm"
-            >
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="expired">Expired</option>
-            </select>
-          </div>
-          
-          <Button 
-            variant="outline" 
-            startIcon={<Filter size={16} />} 
-            onClick={() => {
-              setSearchQuery('');
-              setFilterType('all');
-              setFilterSeverity('all');
-              setFilterStatus('all');
-            }}
-            className="ml-auto"
-          >
-            Clear Filters
-          </Button>
         </div>
       </Card>
 
-      {/* Restrictions Table */}
-      <Card>
-        <DataTable
-          columns={columns}
-          data={filteredRestrictions}
-          keyExtractor={(row) => row.id}
-          emptyMessage="No access restrictions found"
-          emptyIcon={<ShieldAlert size={48} className="text-gray-400" />}
-        />
-      </Card>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <Card>
+          <div className="flex items-center gap-3 mb-5">
+            <SlidersHorizontal className="text-blue-600" size={20} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Assessment Protection</h2>
+          </div>
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={confirmDelete}
-        title="Remove Restriction"
-        message={`Are you sure you want to remove this restriction from ${selectedRestriction?.userId || 'this user'}? This action cannot be undone.`}
-        confirmText="Remove"
-        confirmVariant="danger"
-        cancelText="Cancel"
-      />
+          <div className="space-y-4">
+            <label className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                <EyeOff size={16} /> Block file download during assessment
+              </span>
+              <input type="checkbox" checked={policy.blockFileDownload} onChange={(event) => updatePolicy('blockFileDownload', event.target.checked)} className="toggle toggle-primary" />
+            </label>
+
+            <label className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                <CopyX size={16} /> Block copy/paste and clipboard access
+              </span>
+              <input type="checkbox" checked={policy.blockCopyPaste} onChange={(event) => updatePolicy('blockCopyPaste', event.target.checked)} className="toggle toggle-primary" />
+            </label>
+
+            <label className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                <MonitorSmartphone size={16} /> Strict environment isolation
+              </span>
+              <input type="checkbox" checked={policy.strictEnvironment} onChange={(event) => updatePolicy('strictEnvironment', event.target.checked)} className="toggle toggle-primary" />
+            </label>
+
+            <label className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+                <FolderLock size={16} /> Lock exam when policy is violated
+              </span>
+              <input type="checkbox" checked={policy.examLock} onChange={(event) => updatePolicy('examLock', event.target.checked)} className="toggle toggle-primary" />
+            </label>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center gap-3 mb-5">
+            <CheckCircle className="text-emerald-600" size={20} />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Security Limits</h2>
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Strike limit before lock</label>
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={policy.strikeLimit}
+                onChange={(event) => updatePolicy('strikeLimit', Number(event.target.value) || 1)}
+                className="input input-primary w-full"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fallback timer (seconds)</label>
+              <input
+                type="number"
+                min="5"
+                max="180"
+                value={policy.fallbackTimer}
+                onChange={(event) => updatePolicy('fallbackTimer', Number(event.target.value) || 15)}
+                className="input input-primary w-full"
+              />
+            </div>
+
+            <label className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Require webcam verification</span>
+              <input type="checkbox" checked={policy.webcamRequired} onChange={(event) => updatePolicy('webcamRequired', event.target.checked)} className="toggle toggle-primary" />
+            </label>
+
+            <label className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Allow access without browser controls</span>
+              <input type="checkbox" checked={policy.allowAccessWithoutBrowser} onChange={(event) => updatePolicy('allowAccessWithoutBrowser', event.target.checked)} className="toggle toggle-primary" />
+            </label>
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <div className="flex flex-wrap gap-3 justify-end">
+          <Button variant="outline" onClick={() => setPolicy(defaultSecuritySettings)}>Reset Policy</Button>
+          <Button variant="primary">Save Security Policy</Button>
+        </div>
+      </Card>
     </div>
   );
 };

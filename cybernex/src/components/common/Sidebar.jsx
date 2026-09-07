@@ -1,10 +1,15 @@
 import React, { useState, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import * as LucideIcons from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ROLES } from '../../utils/constants';
-import { usePermissions } from '../../hooks/usePermissions';
-import { ChevronLeft, ChevronRight, Home, LayoutDashboard, BookOpen, Beaker, FileText, BarChart3, Users, Settings, HelpCircle, Bell, Calendar, ShieldCheck, Lock, Database, File, ClipboardList, Award, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, ShieldCheck } from 'lucide-react';
+
+const getSidebarIcon = (iconName) => {
+  const key = String(iconName || 'LayoutDashboard');
+  return LucideIcons[key] || LucideIcons.LayoutDashboard;
+};
 
 /**
  * Main Sidebar component for navigation
@@ -17,271 +22,46 @@ import { ChevronLeft, ChevronRight, Home, LayoutDashboard, BookOpen, Beaker, Fil
 const Sidebar = ({ isCollapsed = false, onToggleCollapse }) => {
   const { user, logout } = useAuth();
   const { isDarkMode } = useTheme();
-  const { hasPermission } = usePermissions();
   const location = useLocation();
   const [activeSubmenu, setActiveSubmenu] = useState(null);
 
-  // Navigation items for each role
   const getNavItems = useCallback(() => {
-    if (!user) return [];
+    if (!user || !Array.isArray(user.resources)) return [];
 
-    const baseItems = [
-      {
-        id: 'dashboard',
-        label: 'Dashboard',
-        icon: LayoutDashboard,
-        path: user.role === ROLES.ADMIN ? '/admin/dashboard' :
-              user.role === ROLES.FACULTY ? '/faculty/dashboard' :
-              '/student/dashboard',
-        permissions: ['dashboard.view']
-      }
-    ];
+    const dbItems = user.resources
+      .filter((resource) => {
+        const menuValue = resource?.menu;
+        return menuValue === true || menuValue === 1 || menuValue === '1';
+      })
+      .map((resource) => {
+        const normalizedPath = typeof resource === 'string' ? resource : resource.path;
+        const iconName = typeof resource === 'string' ? resource : (resource.icon || 'LayoutDashboard');
 
-    // Common items for all authenticated users
-    const commonItems = [
-      {
-        id: 'learning',
-        label: 'Learning',
-        icon: BookOpen,
-        path: '/student/learning',
-        permissions: ['courses.view'],
-        role: ROLES.STUDENT
-      },
-      {
-        id: 'practice',
-        label: 'Practice Labs',
-        icon: Beaker,
-        path: '/student/practice',
-        permissions: ['practice.view'],
-        role: ROLES.STUDENT
-      },
-      {
-        id: 'assessments',
-        label: 'Assessments',
-        icon: FileText,
-        path: user.role === ROLES.ADMIN ? '/admin/assessments' :
-              user.role === ROLES.FACULTY ? '/faculty/assessments' :
-              '/student/assessments',
-        permissions: ['assessment.view']
-      },
-      {
-        id: 'results',
-        label: 'Results',
-        icon: BarChart3,
-        path: user.role === ROLES.ADMIN ? '/admin/results' :
-              user.role === ROLES.FACULTY ? '/faculty/results' :
-              '/student/results',
-        permissions: ['results.view']
-      },
-      {
-        id: 'schedule',
-        label: 'Schedule',
-        icon: Calendar,
-        path: user.role === ROLES.ADMIN ? '/admin/schedule' :
-              user.role === ROLES.FACULTY ? '/faculty/schedule' :
-              '/student/schedule',
-        permissions: ['schedule.view']
-      },
-      {
-        id: 'notifications',
-        label: 'Notifications',
-        icon: Bell,
-        path: '/notifications',
-        permissions: ['notifications.view']
-      },
-      {
-        id: 'profile',
-        label: 'Profile',
-        icon: Users,
-        path: '/profile',
-        permissions: ['users.view']
-      },
-      {
-        id: 'settings',
-        label: 'Settings',
-        icon: Settings,
-        path: '/settings',
-        permissions: ['system.view_settings']
-      },
-    ];
-
-    // Admin-specific items
-    const adminItems = [
-      {
-        id: 'admin-users',
-        label: 'Users',
-        icon: Users,
-        path: '/admin/users',
-        permissions: ['users.view']
-      },
-      {
-        id: 'admin-courses',
-        label: 'Courses',
-        icon: BookOpen,
-        path: '/admin/courses',
-        permissions: ['courses.view']
-      },
-      {
-        id: 'admin-practice',
-        label: 'Practice Labs',
-        icon: Beaker,
-        path: '/admin/practice',
-        permissions: ['practice.view']
-      },
-      {
-        id: 'admin-faculty',
-        label: 'Faculty',
-        icon: ShieldCheck,
-        path: '/admin/faculty',
-        permissions: ['faculty.view']
-      },
-      {
-        id: 'admin-assessments',
-        label: 'Assessments',
-        icon: FileText,
-        path: '/admin/assessments',
-        permissions: ['assessment.view']
-      },
-      {
-        id: 'admin-assessment-control',
-        label: 'Assessment Control',
-        icon: ShieldCheck,
-        path: '/admin/assessment-control',
-        permissions: ['assessment.manage']
-      },
-      {
-        id: 'admin-attendance',
-        label: 'Attendance',
-        icon: ClipboardList,
-        path: '/admin/attendance',
-        permissions: ['attendance.view']
-      },
-      {
-        id: 'admin-restrictions',
-        label: 'Restrictions',
-        icon: Lock,
-        path: '/admin/restrictions',
-        permissions: ['restrictions.view']
-      },
-      {
-        id: 'admin-violations',
-        label: 'Violations',
-        icon: ShieldCheck,
-        path: '/admin/violations',
-        permissions: ['violations.view']
-      },
-      {
-        id: 'admin-backups',
-        label: 'Backups',
-        icon: Database,
-        path: '/admin/backups',
-        permissions: ['backup.view']
-      },
-      {
-        id: 'admin-access-control',
-        label: 'Access Control',
-        icon: Lock,
-        path: '/admin/access-control',
-        permissions: ['access_control.manage']
-      },
-      {
-        id: 'admin-bulk-unlock',
-        label: 'Bulk Unlock',
-        icon: ShieldCheck,
-        path: '/admin/bulk-unlock',
-        permissions: ['assessment.manage']
-      },
-      {
-        id: 'admin-reset',
-        label: 'Reset Attempts',
-        icon: Lock,
-        path: '/admin/reset',
-        permissions: ['assessment.manage']
-      },
-      {
-        id: 'admin-levels',
-        label: 'Levels',
-        icon: Award,
-        path: '/admin/levels',
-        permissions: ['courses.view']
-      },
-      {
-        id: 'admin-assets',
-        label: 'Assets',
-        icon: Database,
-        path: '/admin/assets',
-        permissions: ['assets.view']
-      },
-      {
-        id: 'admin-audit-logs',
-        label: 'Audit Logs',
-        icon: File,
-        path: '/admin/audit-logs',
-        permissions: ['system.view_settings']
-      }
-    ];
-
-    // Faculty-specific items
-    const facultyItems = [
-      {
-        id: 'faculty-students',
-        label: 'Students',
-        icon: Users,
-        path: '/faculty/students',
-        permissions: ['users.view']
-      },
-      {
-        id: 'faculty-courses',
-        label: 'Courses',
-        icon: BookOpen,
-        path: '/faculty/courses',
-        permissions: ['courses.view']
-      }
-    ];
-
-    // Student-specific items
-    const studentItems = [
-      {
-        id: 'student-progress',
-        label: 'My Progress',
-        icon: BarChart3,
-        path: '/student/progress',
-        permissions: ['courses.view']
-      },
-      {
-        id: 'student-attendance',
-        label: 'Attendance',
-        icon: ClipboardList,
-        path: '/student/attendance',
-        permissions: ['attendance.view']
-      },
-    ];
-
-    // Filter items by role and permissions
-    const filterItems = (items) => {
-      return items.filter(item => {
-        // Check role if specified
-        if (item.role && item.role !== user.role) return false;
-        // Check permissions if specified
-        if (item.permissions && item.permissions.length > 0) {
-          return item.permissions.some(p => hasPermission(p));
-        }
-        return true;
+        return {
+          id: normalizedPath,
+          label: resource.name || resource.path || normalizedPath,
+          icon: iconName,
+          path: normalizedPath,
+        };
+      })
+      .sort((a, b) => {
+        const aOrder = Number(a?.sortOrder ?? 0);
+        const bOrder = Number(b?.sortOrder ?? 0);
+        return aOrder - bOrder;
       });
-    };
 
-    const allItems = [...baseItems, ...filterItems(commonItems)];
-
-    if (user.role === ROLES.ADMIN) {
-      allItems.push(...filterItems(adminItems));
-    } else if (user.role === ROLES.FACULTY) {
-      allItems.push(...filterItems(facultyItems));
-    } else if (user.role === ROLES.STUDENT) {
-      allItems.push(...filterItems(studentItems));
+    if (dbItems.length > 0) {
+      return dbItems;
     }
 
-    return allItems;
-  }, [user, hasPermission]);
+    const fallbackPath = user.role === ROLES.ADMIN ? '/admin/dashboard' : user.role === ROLES.FACULTY ? '/faculty/dashboard' : '/student/dashboard';
+    const fallbackItems = [
+      { id: fallbackPath, label: 'Dashboard', icon: 'LayoutDashboard', path: fallbackPath },
+      { id: '/notifications', label: 'Notifications', icon: 'Bell', path: '/notifications' },
+    ];
+
+    return fallbackItems;
+  }, [user]);
 
   // Toggle submenu
   const toggleSubmenu = useCallback((id) => {
@@ -310,7 +90,7 @@ const Sidebar = ({ isCollapsed = false, onToggleCollapse }) => {
 
   // Render nav item
   const renderNavItem = useCallback((item) => {
-    const Icon = item.icon;
+    const IconComponent = getSidebarIcon(item.icon);
     const isActive = isNavItemActive(item.path);
 
     return (
@@ -322,7 +102,9 @@ const Sidebar = ({ isCollapsed = false, onToggleCollapse }) => {
         `}
         onClick={() => toggleSubmenu(null)}
       >
-        <Icon className="w-5 h-5 flex-shrink-0" />
+        <span className="w-5 h-5 flex-shrink-0 inline-flex items-center justify-center">
+          <IconComponent className="w-5 h-5" />
+        </span>
         {!isCollapsed && <span>{item.label}</span>}
       </NavLink>
     );

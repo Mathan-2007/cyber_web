@@ -244,7 +244,7 @@ class NotificationService {
         data: {
           restrictionType,
           reason,
-          action: '/student/profile'
+          action: '/settings'
         }
       });
     } catch (error) {

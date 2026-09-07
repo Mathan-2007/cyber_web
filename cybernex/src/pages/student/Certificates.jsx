@@ -118,7 +118,7 @@ const Certificates = () => {
   const getCertificateIcon = (type) => {
     switch (type) {
       case 'course_completion':
-        return <Certificate size={24} className="text-blue-600" />;
+        return <FileText size={24} className="text-blue-600" />;
       case 'domain_mastery':
         return <ShieldCheck size={24} className="text-purple-600" />;
       case 'achievement':
@@ -201,7 +201,7 @@ const Certificates = () => {
         <Card>
           <div className="text-center">
             <div className="flex justify-center mb-2">
-              <Certificate size={24} className="text-blue-600" />
+              <FileText size={24} className="text-blue-600" />
             </div>
             <div className="text-2xl font-bold text-blue-600">
               {stats.courseCompletions}
@@ -369,7 +369,7 @@ const Certificates = () => {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <Certificate size={32} className="mx-auto mb-2 text-blue-600" />
+            <FileText size={32} className="mx-auto mb-2 text-blue-600" />
             <h4 className="font-semibold text-blue-800 dark:text-blue-200 mb-1">
               Course Completion
             </h4>

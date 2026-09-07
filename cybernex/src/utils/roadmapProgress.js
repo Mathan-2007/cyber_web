@@ -1,4 +1,9 @@
-import { ROADMAP_STATES } from '../data/roadmapConfig';
+const ROADMAP_STATES = {
+  LOCKED: 'locked',
+  AVAILABLE: 'available',
+  IN_PROGRESS: 'in-progress',
+  COMPLETED: 'completed',
+};
 
 /**
  * Resolve a topic's linked course objects from the real course list.

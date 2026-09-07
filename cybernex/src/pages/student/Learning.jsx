@@ -186,33 +186,65 @@ const Learning = () => {
       </div>
 
       <Card>
-        <div className="flex flex-wrap gap-4">
-          <div className="flex gap-2">
-            <button
-              onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'all' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              All Courses
-            </button>
-            <button
-              onClick={() => { setActiveTab('in-progress'); setCurrentPage(1); }}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'in-progress' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              In Progress
-            </button>
-            <button
-              onClick={() => { setActiveTab('completed'); setCurrentPage(1); }}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'completed' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              Completed
-            </button>
-          </div>
+        <div className="flex items-center flex-wrap gap-3">
+  <div className="flex gap-2">
+    <button
+      onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
+      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+        activeTab === 'all'
+          ? 'border-slate-200 bg-white text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white'
+          : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+      }`}
+    >
+      All Courses
+    </button>
+    <button
+      onClick={() => { setActiveTab('in-progress'); setCurrentPage(1); }}
+      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+        activeTab === 'in-progress'
+          ? 'border-slate-200 bg-white text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white'
+          : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+      }`}
+    >
+      In Progress
+    </button>
+    <button
+      onClick={() => { setActiveTab('completed'); setCurrentPage(1); }}
+      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+        activeTab === 'completed'
+          ? 'border-slate-200 bg-white text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white'
+          : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+      }`}
+    >
+      Completed
+    </button>
+  </div>
 
-          <div className="flex gap-2">
-            <button onClick={() => setViewMode('grid')} className={`rounded-lg p-2 ${viewMode === 'grid' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`} title="Grid view"><Grid3X3 size={16} /></button>
-            <button onClick={() => setViewMode('list')} className={`rounded-lg p-2 ${viewMode === 'list' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`} title="List view"><List size={16} /></button>
-          </div>
-        </div>
+  <div className="flex gap-2">
+    <button
+      onClick={() => setViewMode('grid')}
+      className={`rounded-lg border p-2 transition-colors ${
+        viewMode === 'grid'
+          ? 'border-slate-200 bg-white text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white'
+          : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+      }`}
+      title="Grid view"
+    >
+      <Grid3X3 size={16} />
+    </button>
+    <button
+      onClick={() => setViewMode('list')}
+      className={`rounded-lg border p-2 transition-colors ${
+        viewMode === 'list'
+          ? 'border-slate-200 bg-white text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white'
+          : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+      }`}
+      title="List view"
+    >
+      <List size={16} />
+    </button>
+  </div>
+</div>
 
         <div className="mt-4 flex flex-wrap gap-4">
           <select value={selectedDomain} onChange={(e) => setSelectedDomain(e.target.value)} className="input input-primary min-w-[180px]">

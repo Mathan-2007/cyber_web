@@ -1,199 +1,315 @@
-import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { BookOpen, Compass, Cpu, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useData } from '../../contexts/DataContext';
+import Card from '../../components/common/Card';
+import LearningPathModal from '../../components/common/LearningPathModal';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { ROADMAP } from '../../data/roadmapConfig';
-import { getTopicListStatus, getOverallProgress } from '../../utils/roadmapProgress';
-import {
-  ArrowRight,
-  BookOpen,
-  CheckCircle2,
-  Compass,
-  Cpu,
-  Globe,
-  Network,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Terminal,
-} from 'lucide-react';
+import { apiRequest } from '../../services/api';
 
-const DOMAIN_ICON = {
-  Foundational: Cpu,
-  'Network Security': Network,
-  Linux: Terminal,
-  Windows: Terminal,
-  'Web Security': Globe,
-  SOC: Search,
-  'Digital Forensics': ShieldCheck,
-  Pentesting: Search,
-  'Active Directory': ShieldCheck,
-  'Cloud Security': Globe,
-  DevSecOps: Sparkles,
-  'AI Security': Sparkles,
-  'AI Engineering': Sparkles,
+const NODE_WIDTH = 200;
+const NODE_HEIGHT = 64;
+const LAYER_GAP = 110;
+const SIBLING_GAP = 40;
+
+const normalizeRoadmapData = (payload = {}) => {
+  const list = Array.isArray(payload?.paths) ? payload.paths : [];
+  const pathMap = new Map();
+
+  list.forEach((path) => {
+    pathMap.set(Number(path.id), {
+      id: Number(path.id),
+      title: path.title || 'Untitled path',
+      layer: Number(path.layer ?? 1),
+      path_order: Number(path.path_order ?? 1),
+      parent_path_id: path.parent_path_id != null ? Number(path.parent_path_id) : null,
+      summary: path.summary || 'Career-focused learning roadmap.',
+      sections: Array.isArray(path.sections)
+        ? path.sections.map((section, sectionIndex) => ({
+            id: section.id || `${path.id}-section-${sectionIndex}`,
+            title: section.title || `Section ${sectionIndex + 1}`,
+            order: Number(section.order ?? sectionIndex + 1),
+            topics: Array.isArray(section.topics)
+              ? section.topics.map((topic, topicIndex) => ({
+                  id: topic.id || `${section.id || sectionIndex}-topic-${topicIndex}`,
+                  title: topic.title || 'Untitled topic',
+                  order: Number(topic.order ?? topicIndex + 1),
+                  status: topic.status || 'open'
+                }))
+              : []
+          }))
+        : [],
+      children: Array.isArray(path.children) ? path.children.map((child) => Number(child)) : []
+    });
+  });
+
+  return [...pathMap.values()].sort((a, b) => a.layer - b.layer || a.path_order - b.path_order);
 };
 
-const PATH_STYLES = {
-  foundation: 'border-cyan-200 bg-cyan-50 text-cyan-700',
-  core: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  'security-analyst': 'border-sky-200 bg-sky-50 text-sky-700',
-  'penetration-tester': 'border-rose-200 bg-rose-50 text-rose-700',
-  'security-engineer': 'border-amber-200 bg-amber-50 text-amber-700',
-  'ai-security': 'border-violet-200 bg-violet-50 text-violet-700',
+const computeTreeLayout = (paths) => {
+  const byId = new Map(paths.map((path) => [path.id, path]));
+  const childrenOf = new Map();
+
+  paths.forEach((path) => childrenOf.set(path.id, []));
+  paths.forEach((path) => {
+    if (path.parent_path_id != null && childrenOf.has(path.parent_path_id)) {
+      childrenOf.get(path.parent_path_id).push(path.id);
+    }
+  });
+
+  childrenOf.forEach((kids) => {
+    kids.sort((a, b) => byId.get(a).path_order - byId.get(b).path_order);
+  });
+
+  const roots = paths
+    .filter((path) => path.parent_path_id == null || !byId.has(path.parent_path_id))
+    .sort((a, b) => a.path_order - b.path_order)
+    .map((path) => path.id);
+
+  let nextSlot = 0;
+  const slotOf = new Map();
+
+  const assignSlots = (id) => {
+    const kids = childrenOf.get(id) || [];
+    if (kids.length === 0) {
+      slotOf.set(id, nextSlot++);
+      return slotOf.get(id);
+    }
+
+    const childSlots = kids.map(assignSlots);
+    const avg = childSlots.reduce((a, b) => a + b, 0) / childSlots.length;
+    slotOf.set(id, avg);
+    return avg;
+  };
+
+  roots.forEach(assignSlots);
+
+  const layers = [...new Set(paths.map((path) => path.layer))].sort((a, b) => a - b);
+  const layerIndex = new Map(layers.map((layer, index) => [layer, index]));
+
+  const positions = new Map();
+  paths.forEach((path) => {
+    positions.set(path.id, {
+      x: slotOf.get(path.id) * (NODE_WIDTH + SIBLING_GAP),
+      y: layerIndex.get(path.layer) * (NODE_HEIGHT + LAYER_GAP)
+    });
+  });
+
+  const width = (nextSlot > 0 ? nextSlot : 1) * (NODE_WIDTH + SIBLING_GAP);
+  const height = layers.length * (NODE_HEIGHT + LAYER_GAP);
+
+  return { positions, width, height, childrenOf };
+};
+
+const getLayerTone = (layer) => {
+  const palette = {
+    1: 'border-cyan-300 bg-cyan-50 text-cyan-800 dark:border-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200',
+    2: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200',
+    3: 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200',
+    4: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200',
+    5: 'border-fuchsia-300 bg-fuchsia-50 text-fuchsia-800 dark:border-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-200',
+    6: 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-900/30 dark:text-sky-200'
+  };
+
+  return palette[layer] || 'border-slate-300 bg-slate-50 text-slate-800 dark:border-slate-600 dark:bg-slate-800/60 dark:text-slate-200';
 };
 
 const Roadmap = () => {
   const { user } = useAuth();
-  const { filteredCourses, filteredLessons, isLoading } = useData();
-  const [selectedPath, setSelectedPath] = useState('foundation');
+  const [paths, setPaths] = useState([]);
+  const [selectedPathId, setSelectedPathId] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const ctx = useMemo(
-    () => ({ courses: filteredCourses || [], lessons: filteredLessons || [], user }),
-    [filteredCourses, filteredLessons, user]
+  useEffect(() => {
+    const fetchRoadmap = async () => {
+      try {
+        setIsLoading(true);
+        setError('');
+
+        const response = await apiRequest('/roadmap');
+        const normalized = normalizeRoadmapData(response);
+        setPaths(normalized);
+      } catch (loadError) {
+        setPaths([]);
+        setSelectedPathId(null);
+        setError(loadError.message || 'Unable to load roadmap data.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchRoadmap();
+  }, []);
+
+  const byId = useMemo(() => new Map(paths.map((path) => [path.id, path])), [paths]);
+
+  useEffect(() => {
+    if (!paths.length) {
+      setSelectedPathId(null);
+      return;
+    }
+
+    setSelectedPathId((current) => {
+      if (current != null && byId.has(current)) {
+        return current;
+      }
+      return paths[0].id;
+    });
+  }, [paths, byId]);
+
+  const totalTopics = useMemo(
+    () => paths.reduce((sum, path) => sum + path.sections.reduce((sectionSum, section) => sectionSum + section.topics.length, 0), 0),
+    [paths]
   );
 
-  const foundationTopics = useMemo(() => getTopicListStatus(ROADMAP.foundation.topics, ctx), [ctx]);
-  const coreTopics = useMemo(() => getTopicListStatus(ROADMAP.core.topics, ctx), [ctx]);
-  const advancedTopics = useMemo(() => getTopicListStatus(ROADMAP.advanced.topics, ctx), [ctx]);
+  const selectedPath = selectedPathId != null ? byId.get(selectedPathId) || null : null;
+  const { positions, width, height } = useMemo(() => computeTreeLayout(paths), [paths]);
 
-  const careerCollections = useMemo(
-    () => ROADMAP.careers.map((career) => ({
-      ...career,
-      topics: getTopicListStatus(career.topics, ctx),
-    })),
-    [ctx]
-  );
-
-  const paths = useMemo(
-    () => [
-      { id: 'foundation', title: 'Foundation', description: ROADMAP.foundation.tagline, topics: foundationTopics },
-      { id: 'core', title: 'Cybersecurity Core', description: ROADMAP.core.tagline, topics: coreTopics },
-      ...careerCollections.map((career) => ({
-        id: career.id,
-        title: career.title,
-        description: career.summary,
-        topics: career.topics,
-      })),
-      { id: 'ai-security', title: 'AI Security', description: ROADMAP.advanced.tagline, topics: advancedTopics },
-    ],
-    [foundationTopics, coreTopics, careerCollections, advancedTopics]
-  );
-
-  const selectedPathConfig = paths.find((path) => path.id === selectedPath) || paths[0];
-  const overallProgress = useMemo(() => {
-    const allTopics = paths.flatMap((path) => path.topics);
-    return getOverallProgress(allTopics);
-  }, [paths]);
+  const handleSelect = (pathId) => {
+    setSelectedPathId(pathId);
+    setIsModalOpen(true);
+  };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner size="lg" />
+      <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">Loading cybersecurity roadmap…</p>
+        </div>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <Card variant="elevated" className="p-6 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300">
+          <ShieldCheck size={26} />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Roadmap unavailable</h2>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{error}</p>
+      </Card>
+    );
+  }
+
   return (
-    <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-8">
+    <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-4 md:p-8 dark:border-slate-700 dark:bg-slate-900">
       <div className="text-center">
-        <span className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-700">
+        <span className="inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300">
           <Compass size={12} /> Cyber Atlas
         </span>
-        <h1 className="mt-3 text-2xl font-bold text-slate-900 md:text-3xl">Cyber Security Learning Roadmap</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Your learning path is open and guided — choose a track, then move from fundamentals to specialization.
+        <h1 className="mt-3 text-2xl font-bold text-slate-900 md:text-3xl dark:text-white">Cybersecurity Learning Roadmap</h1>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+          Welcome back, {user?.name || 'Learner'} — {paths.length} paths and {totalTopics} topics loaded live from the roadmap table.
         </p>
-        <div className="mx-auto mt-4 max-w-xs">
-          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-            <div className="h-full rounded-full bg-cyan-500 transition-all" style={{ width: `${overallProgress}%` }} />
-          </div>
-          <p className="mt-2 text-[11px] font-medium text-slate-500">{overallProgress}% overall progress</p>
-        </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {paths.map((path) => {
-          const active = path.id === selectedPathConfig.id;
-          const Icon = path.id === 'foundation' ? BookOpen : path.id === 'core' ? ShieldCheck : DOMAIN_ICON[path.topics[0]?.domain] || Cpu;
-          return (
-            <button
-              key={path.id}
-              type="button"
-              onClick={() => setSelectedPath(path.id)}
-              className={`rounded-2xl border p-4 text-left transition-all ${active ? PATH_STYLES[path.id] || 'border-slate-300 bg-slate-50 text-slate-700' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white'}`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/80">
-                  <Icon size={18} />
-                </span>
-                <span className="rounded-full border border-current/20 bg-white/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]">
-                  {path.topics.filter((t) => t.state === 'completed').length}/{path.topics.length}
-                </span>
-              </div>
-              <h2 className="mt-4 text-lg font-semibold">{path.title}</h2>
-              <p className="mt-1 text-sm opacity-80">{path.description}</p>
-            </button>
-          );
-        })}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Learning paths</p>
+              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{paths.length}</p>
+            </div>
+            <div className="rounded-xl bg-cyan-100 p-3 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300">
+              <BookOpen size={18} />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Topics</p>
+              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{totalTopics}</p>
+            </div>
+            <div className="rounded-xl bg-violet-100 p-3 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+              <Sparkles size={18} />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Selected</p>
+              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{selectedPath ? '1' : '0'}</p>
+            </div>
+            <div className="rounded-xl bg-emerald-100 p-3 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              <Cpu size={18} />
+            </div>
+          </div>
+        </Card>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:p-6">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Selected track</p>
-            <h2 className="mt-2 text-2xl font-bold text-slate-900">{selectedPathConfig.title}</h2>
-          </div>
-          <Link
-            to={`/student/learning`}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-cyan-300 hover:text-cyan-700"
-          >
-            Explore learning
-            <ArrowRight size={15} />
-          </Link>
-        </div>
+      <div className="overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-800/40">
+        <div className="relative mx-auto" style={{ width: Math.max(width, 320), height: height + NODE_HEIGHT }}>
+          <svg className="pointer-events-none absolute inset-0" width={Math.max(width, 320)} height={height + NODE_HEIGHT}>
+            {paths.map((path) => {
+              if (path.parent_path_id == null || !positions.has(path.parent_path_id)) {
+                return null;
+              }
 
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          {selectedPathConfig.topics.map((topic) => {
-            const Icon = DOMAIN_ICON[topic.domain] || Cpu;
-            const stateTone =
-              topic.state === 'completed'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : topic.state === 'in-progress'
-                  ? 'border-cyan-200 bg-cyan-50 text-cyan-700'
-                  : 'border-slate-200 bg-white text-slate-700';
+              const parentPos = positions.get(path.parent_path_id);
+              const childPos = positions.get(path.id);
+              const x1 = parentPos.x + NODE_WIDTH / 2;
+              const y1 = parentPos.y + NODE_HEIGHT;
+              const x2 = childPos.x + NODE_WIDTH / 2;
+              const y2 = childPos.y;
+              const midY = (y1 + y2) / 2;
+
+              return (
+                <path
+                  key={`edge-${path.id}`}
+                  d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  className="text-slate-300 dark:text-slate-600"
+                />
+              );
+            })}
+          </svg>
+
+          {paths.map((path) => {
+            const pos = positions.get(path.id);
+            const isSelected = selectedPathId === path.id;
+            const topicCount = path.sections.reduce((sum, section) => sum + section.topics.length, 0);
 
             return (
-              <Link
-                key={topic.id}
-                to={topic.primaryCourseId ? `/student/learning/${topic.primaryCourseId}` : '/student/learning'}
-                className={`rounded-xl border p-3 transition hover:-translate-y-0.5 hover:border-cyan-300 ${stateTone}`}
+              <button
+                key={path.id}
+                type="button"
+                onClick={() => handleSelect(path.id)}
+                style={{ left: pos.x, top: pos.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
+                className={`absolute flex flex-col justify-center rounded-xl border-2 px-3 text-left shadow-sm transition-all ${
+                  isSelected
+                    ? `${getLayerTone(path.layer)} ring-2 ring-offset-2 ring-cyan-400 dark:ring-offset-slate-900`
+                    : `${getLayerTone(path.layer)} hover:shadow-md`
+                }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/80">
-                      <Icon size={16} />
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold">{topic.title}</p>
-                      <p className="text-[11px] uppercase tracking-[0.12em] text-slate-500">{topic.domain}</p>
-                    </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold">{path.title}</span>
+                    <span className="block text-[11px] opacity-75">Layer {path.layer} · {topicCount} topics</span>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-current/20 bg-white/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]">
-                    {topic.state === 'completed' ? <CheckCircle2 size={12} /> : null}
-                    {topic.state === 'completed' ? 'Done' : topic.state === 'in-progress' ? 'In progress' : 'Open'}
+                  <span className="rounded-full border border-current/20 bg-white/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] dark:bg-slate-900/50">
+                    {isSelected ? 'Open' : 'View'}
                   </span>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-                  <div className="h-full rounded-full bg-cyan-500 transition-all" style={{ width: `${topic.progress}%` }} />
-                </div>
-                <p className="mt-2 text-xs text-slate-500">{topic.progress}% complete</p>
-              </Link>
+              </button>
             );
           })}
         </div>
       </div>
+
+      <LearningPathModal
+        path={selectedPath}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   );
 };

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
 import { ROLES } from '../../utils/constants';
@@ -10,17 +11,33 @@ import LoadingSpinner from '../../components/common/LoadingSpinner';
 import DataTable from '../../components/common/DataTable';
 import SearchBar from '../../components/common/SearchBar';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
-import { Plus, Edit2, Trash2, Eye, Mail, Calendar, ShieldAlert, Filter } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, Mail, Calendar, ShieldAlert, Filter, Upload, UserPlus, X, Users as UsersIcon } from 'lucide-react';
+
+const initialSingleUserForm = {
+  name: '',
+  email: '',
+  password: '',
+  role: ROLES.STUDENT,
+  status: 'active'
+};
 
 const Users = () => {
   const { user } = useAuth();
-  const { users, isLoading } = useData();
+  const { users, isLoading, createUser, removeUser } = useData();
+  const fileInputRef = useRef(null);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [showAddUserForm, setShowAddUserForm] = useState(false);
+  const [singleUserForm, setSingleUserForm] = useState(initialSingleUserForm);
+  const [singleUserError, setSingleUserError] = useState('');
+  const [bulkImportError, setBulkImportError] = useState('');
+  const [bulkImportSuccess, setBulkImportSuccess] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -93,12 +110,119 @@ const Users = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDeleteUser = () => {
-    if (selectedUser) {
-      // In a real implementation, this would call an API
-      console.log('Deleting user:', selectedUser.id);
+  const confirmDeleteUser = async () => {
+    if (!selectedUser) return;
+
+    try {
+      await removeUser(selectedUser.id);
       setShowDeleteModal(false);
       setSelectedUser(null);
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      setBulkImportError('Failed to delete user. Please try again.');
+    }
+  };
+
+  const handleSingleUserSubmit = async (event) => {
+    event.preventDefault();
+    setSingleUserError('');
+
+    const trimmedName = singleUserForm.name.trim();
+    const trimmedEmail = singleUserForm.email.trim();
+
+    if (!trimmedName || !trimmedEmail) {
+      setSingleUserError('Name and email are required.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setSingleUserError('Please enter a valid email address.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await createUser({
+        name: trimmedName,
+        email: trimmedEmail,
+        password: singleUserForm.password || 'TempPass123!',
+        role: singleUserForm.role,
+        status: singleUserForm.status,
+        level: 1,
+        department: 'General'
+      });
+
+      setSingleUserForm(initialSingleUserForm);
+      setShowAddUserForm(false);
+    } catch (error) {
+      console.error('Failed to add user:', error);
+      setSingleUserError(error?.message || 'Failed to add user. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleBulkImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setBulkImportError('');
+    setBulkImportSuccess('');
+    setIsImporting(true);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      if (!rows.length) {
+        throw new Error('The selected file does not contain any rows.');
+      }
+
+      const normalizedUsers = rows
+        .map((row) => {
+          const name = String(row.name || row.fullName || row['Full Name'] || row['Name'] || '').trim();
+          const email = String(row.email || row.Email || row['Email Address'] || '').trim();
+          const role = String(row.role || row.Role || ROLES.STUDENT).trim();
+          const status = String(row.status || row.Status || 'active').trim();
+          const password = String(row.password || row.Password || 'TempPass123!').trim();
+
+          if (!name || !email) return null;
+
+          return {
+            name,
+            email,
+            role: ['admin', 'faculty', 'student'].includes(role.toLowerCase()) ? role.toLowerCase() : ROLES.STUDENT,
+            status: ['active', 'inactive', 'pending'].includes(status.toLowerCase()) ? status.toLowerCase() : 'active',
+            password: password || 'TempPass123!',
+            level: Number(row.level || row.Level || 1),
+            department: row.department || row.Department || 'General'
+          };
+        })
+        .filter(Boolean);
+
+      if (!normalizedUsers.length) {
+        throw new Error('No valid user rows were found. Use columns like name, email, role, status, password.');
+      }
+
+      const results = [];
+      for (const user of normalizedUsers) {
+        const createdUser = await createUser(user);
+        results.push(createdUser);
+      }
+
+      setBulkImportSuccess(`${results.length} user(s) imported successfully.`);
+    } catch (error) {
+      console.error('Bulk import failed:', error);
+      setBulkImportError(error?.message || 'Failed to import user list. Please check the file format.');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -212,18 +336,120 @@ const Users = () => {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           User Management
         </h1>
-        <Link to="/admin/users/new">
-          <Button variant="primary" startIcon={<Plus size={16} />}>
-            Add User
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="primary" startIcon={<Plus size={16} />} onClick={() => setShowAddUserForm(!showAddUserForm)}>
+            {showAddUserForm ? 'Close Form' : 'Add User'}
           </Button>
-        </Link>
+          <Button variant="outline" startIcon={<Upload size={16} />} onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
+            {isImporting ? 'Importing...' : 'Import Excel'}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            onChange={handleBulkImport}
+          />
+        </div>
       </div>
+
+      {showAddUserForm && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create Single User</h3>
+            <button className="text-gray-500 hover:text-gray-800" onClick={() => setShowAddUserForm(false)} type="button" aria-label="Close add user form">
+              <X size={18} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSingleUserSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Full Name</label>
+              <input
+                type="text"
+                value={singleUserForm.name}
+                onChange={(e) => setSingleUserForm({ ...singleUserForm, name: e.target.value })}
+                className="input input-primary w-full"
+                placeholder="Enter user name"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+              <input
+                type="email"
+                value={singleUserForm.email}
+                onChange={(e) => setSingleUserForm({ ...singleUserForm, email: e.target.value })}
+                className="input input-primary w-full"
+                placeholder="user@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
+              <input
+                type="text"
+                value={singleUserForm.password}
+                onChange={(e) => setSingleUserForm({ ...singleUserForm, password: e.target.value })}
+                className="input input-primary w-full"
+                placeholder="Optional default password"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Role</label>
+              <select
+                value={singleUserForm.role}
+                onChange={(e) => setSingleUserForm({ ...singleUserForm, role: e.target.value })}
+                className="select select-primary w-full"
+              >
+                <option value={ROLES.ADMIN}>Admin</option>
+                <option value={ROLES.FACULTY}>Faculty</option>
+                <option value={ROLES.STUDENT}>Student</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status</label>
+              <select
+                value={singleUserForm.status}
+                onChange={(e) => setSingleUserForm({ ...singleUserForm, status: e.target.value })}
+                className="select select-primary w-full"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
+
+            {singleUserError && (
+              <div className="md:col-span-2 text-sm text-red-600 dark:text-red-400">{singleUserError}</div>
+            )}
+
+            <div className="md:col-span-2 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowAddUserForm(false)} type="button">
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" isLoading={isSubmitting} startIcon={<UserPlus size={16} />}>
+                Save User
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {(bulkImportError || bulkImportSuccess) && (
+        <Card>
+          {bulkImportError && <div className="text-sm text-red-600 dark:text-red-400">{bulkImportError}</div>}
+          {bulkImportSuccess && <div className="text-sm text-emerald-600 dark:text-emerald-400">{bulkImportSuccess}</div>}
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <Card>
           <div className="text-center">
             <div className="flex justify-center mb-2">
-              <Users size={24} className="text-blue-600" />
+              <UsersIcon size={24} className="text-blue-600" />
             </div>
             <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
             <div className="text-sm text-gray-600 dark:text-gray-300">Total Users</div>
@@ -233,7 +459,7 @@ const Users = () => {
         <Card>
           <div className="text-center">
             <div className="flex justify-center mb-2">
-              <Users size={24} className="text-green-600" />
+              <UsersIcon size={24} className="text-green-600" />
             </div>
             <div className="text-2xl font-bold text-green-600">{stats.active}</div>
             <div className="text-sm text-gray-600 dark:text-gray-300">Active</div>
@@ -243,7 +469,7 @@ const Users = () => {
         <Card>
           <div className="text-center">
             <div className="flex justify-center mb-2">
-              <Users size={24} className="text-gray-600" />
+              <UsersIcon size={24} className="text-gray-600" />
             </div>
             <div className="text-2xl font-bold text-gray-600">{stats.inactive}</div>
             <div className="text-sm text-gray-600 dark:text-gray-300">Inactive</div>
@@ -322,7 +548,7 @@ const Users = () => {
 
         {users.length === 0 ? (
           <div className="text-center py-12">
-            <Users size={48} className="mx-auto mb-4 text-gray-400" />
+            <UsersIcon size={48} className="mx-auto mb-4 text-gray-400" />
             <p className="text-gray-600 dark:text-gray-300 mb-4">
               No users found
             </p>
@@ -351,7 +577,7 @@ const Users = () => {
           <Button variant="outline" startIcon={<Mail size={16} />}>
             Email All Users
           </Button>
-          <Button variant="outline" startIcon={<Users size={16} />}>
+          <Button variant="outline" startIcon={<UsersIcon size={16} />}>
             Export User List
           </Button>
           <Button variant="outline" startIcon={<Filter size={16} />}>
@@ -369,7 +595,7 @@ const Users = () => {
         </h3>
         <div className="flex items-center justify-center h-32 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <div className="text-center">
-            <Users size={32} className="mx-auto mb-2 text-gray-400" />
+            <UsersIcon size={32} className="mx-auto mb-2 text-gray-400" />
             <p className="text-gray-600 dark:text-gray-300">
               User analytics chart will be available in the full version
             </p>

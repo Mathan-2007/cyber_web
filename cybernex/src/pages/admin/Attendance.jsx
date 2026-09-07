@@ -36,41 +36,48 @@ const Attendance = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
+  const safeText = (value) => String(value ?? '');
+
   // Filter attendance data
   const getFilteredAttendance = () => {
-    let attendance = [...filteredAttendance];
+    let attendance = [...(filteredAttendance || [])];
     
     // Filter by search query
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
-      attendance = attendance.filter(a => 
-        a.userId.toLowerCase().includes(lowerQuery) ||
-        a.userName?.toLowerCase().includes(lowerQuery) ||
-        a.date.toLowerCase().includes(lowerQuery) ||
-        a.status.toLowerCase().includes(lowerQuery)
-      );
+      attendance = attendance.filter(a => {
+        const userId = safeText(a.userId).toLowerCase();
+        const userName = safeText(a.userName).toLowerCase();
+        const date = safeText(a.date).toLowerCase();
+        const status = safeText(a.status).toLowerCase();
+
+        return userId.includes(lowerQuery) ||
+          userName.includes(lowerQuery) ||
+          date.includes(lowerQuery) ||
+          status.includes(lowerQuery);
+      });
     }
 
     // Filter by date
     if (selectedDate) {
-      attendance = attendance.filter(a => a.date === selectedDate);
+      attendance = attendance.filter(a => safeText(a.date) === selectedDate);
     }
 
     // Filter by status
     if (selectedStatus !== 'all') {
-      attendance = attendance.filter(a => a.status === selectedStatus);
+      attendance = attendance.filter(a => safeText(a.status) === selectedStatus);
     }
 
     // Filter by user
     if (selectedUser !== 'all') {
-      attendance = attendance.filter(a => a.userId === selectedUser);
+      attendance = attendance.filter(a => safeText(a.userId) === selectedUser);
     }
 
     // Sort by date (newest first) then by time
     attendance.sort((a, b) => {
-      const dateCompare = new Date(b.date) - new Date(a.date);
+      const dateCompare = new Date(b.date || 0) - new Date(a.date || 0);
       if (dateCompare !== 0) return dateCompare;
-      return b.time.localeCompare(a.time);
+      return safeText(b.time).localeCompare(safeText(a.time));
     });
 
     return attendance;
@@ -84,8 +91,8 @@ const Attendance = () => {
   );
 
   // Get unique dates and users for filters
-  const uniqueDates = [...new Set(filteredAttendanceList.map(a => a.date))].sort((a, b) => new Date(b) - new Date(a));
-  const studentUsers = filteredUsers.filter(u => u.role === 'STUDENT');
+  const uniqueDates = [...new Set((filteredAttendanceList || []).map(a => a.date).filter(Boolean))].sort((a, b) => new Date(b) - new Date(a));
+  const studentUsers = (filteredUsers || []).filter(u => String(u.role).toUpperCase() === 'STUDENT');
 
   // Calculate statistics
   const totalAttendance = filteredAttendanceList.length;

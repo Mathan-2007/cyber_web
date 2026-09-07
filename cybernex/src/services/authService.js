@@ -15,7 +15,7 @@ import {
   deleteUser,
   logAction
 } from './storageService';
-import { ROLES, DEMO_CREDENTIALS, STORAGE_KEYS } from '../utils/constants';
+import { STORAGE_KEYS } from '../utils/constants';
 import {
   ADMIN_DEFAULT_PERMISSIONS,
   FACULTY_DEFAULT_PERMISSIONS,
@@ -33,38 +33,6 @@ class AuthService {
    */
   static async login(email, password) {
     try {
-      // Check demo credentials first
-      const demoMatch = Object.entries(DEMO_CREDENTIALS).find(([role, creds]) =>
-        creds.email === email && creds.password === password
-      );
-
-      if (demoMatch) {
-        const [role, creds] = demoMatch;
-        const users = await getUsers();
-        const user = users.find(u => u.email === email);
-
-        if (user) {
-          // Set remember me if requested
-          // removed 'remember me' feature
-
-          // Update last active
-          await updateUser(user.id, { lastActive: new Date().toISOString() });
-
-          // Log login
-          logAction({
-            action: 'LOGIN',
-            userId: user.id,
-            role: user.role,
-            target: 'System',
-            status: 'Success',
-            details: { method: 'demo' }
-          });
-
-          return { success: true, user };
-        }
-      }
-
-      // Check regular users
       const users = await getUsers();
       const user = users.find(u => u.email === email);
 
@@ -100,43 +68,6 @@ class AuthService {
   }
 
   /**
-   * Demo login as specific role
-   * @param {string} role - Role to login as
-   * @returns {Promise<object>} - Login result
-   */
-  static async demoLogin(role) {
-    const creds = DEMO_CREDENTIALS[role];
-    if (!creds) {
-      return { success: false, error: 'Invalid demo role' };
-    }
-    return this.login(creds.email, creds.password, false);
-  }
-
-  /**
-   * Login as admin
-   * @returns {Promise<object>} - Login result
-   */
-  static async loginAsAdmin() {
-    return this.demoLogin(ROLES.ADMIN);
-  }
-
-  /**
-   * Login as faculty
-   * @returns {Promise<object>} - Login result
-   */
-  static async loginAsFaculty() {
-    return this.demoLogin(ROLES.FACULTY);
-  }
-
-  /**
-   * Login as student
-   * @returns {Promise<object>} - Login result
-   */
-  static async loginAsStudent() {
-    return this.demoLogin(ROLES.STUDENT);
-  }
-
-  /**
    * Logout current user
    * @returns {Promise<object>} - Logout result
    */
@@ -144,7 +75,6 @@ class AuthService {
     try {
       const user = getItem(STORAGE_KEYS.USER);
 
-      // Log logout
       if (user) {
         logAction({
           action: 'LOGOUT',
@@ -155,14 +85,16 @@ class AuthService {
         });
       }
 
-      // Clear user session
+      // Force-clear both local token and cookie, independent of role or permissions.
+      localStorage.removeItem('cybernex_token');
+      document.cookie = 'cybernex_token=; path=/; max-age=0; samesite=lax';
       removeItem(STORAGE_KEYS.USER);
-
-      // removed 'remember me' cleanup
 
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
+      localStorage.removeItem('cybernex_token');
+      document.cookie = 'cybernex_token=; path=/; max-age=0; samesite=lax';
       return { success: false, error: 'Logout failed' };
     }
   }

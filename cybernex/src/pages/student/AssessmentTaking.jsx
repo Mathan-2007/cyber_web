@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
 import { useCountdown } from '../../hooks/useCountdown';
+import { getCachedAssessmentAccessForStudent } from '../../services/storageService';
 import { selectQuestionsForStudent, getEffectivePolicy, getQuestionPool } from '../../utils/assessmentPool';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -32,7 +33,7 @@ const AssessmentTaking = () => {
   const { assessmentId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { filteredAssessments, filteredResults, createResult, createViolation, getAssessmentAccessForStudent, isLoading } = useData();
+  const { filteredAssessments, filteredResults, createResult, createViolation, isLoading } = useData();
   const [assessment, setAssessment] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -75,7 +76,7 @@ const AssessmentTaking = () => {
   }, [assessmentId, filteredAssessments, filteredResults, user, navigate]);
 
   const effectivePolicy = assessment && user ? getEffectivePolicy(assessment, user.id) : { timeLimit: assessment?.duration || 60, questionsPerAttempt: 5, maxViolations: 3, fullScreenRequired: true };
-  const accessGrant = assessment && user ? getAssessmentAccessForStudent(assessment.id, user.id) : null;
+  const accessGrant = assessment && user ? getCachedAssessmentAccessForStudent(assessment.id, user.id) : null;
   const assessmentDuration = effectivePolicy.timeLimit || accessGrant?.durationOverride || assessment?.duration || 60; // minutes
   const { 
     formattedTime, 

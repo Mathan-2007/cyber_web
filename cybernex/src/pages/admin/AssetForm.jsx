@@ -25,33 +25,8 @@ const AssetForm = () => {
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
 
-  // Mock existing asset for edit mode
-  const mockAssets = {
-    'ASSET-001': {
-      name: 'Cybersecurity Fundamentals PDF',
-      type: 'document',
-      category: 'course_material',
-      extension: 'pdf',
-      size: 2.5,
-      description: 'Comprehensive guide to cybersecurity fundamentals',
-      tags: ['cybersecurity', 'fundamentals', 'beginner'],
-      uploadedBy: 'admin',
-      isActive: true
-    },
-    'ASSET-002': {
-      name: 'Network Security Diagram',
-      type: 'image',
-      category: 'diagram',
-      extension: 'png',
-      size: 1.2,
-      description: 'Network security architecture diagram',
-      tags: ['network', 'security', 'diagram'],
-      uploadedBy: 'faculty-001',
-      isActive: true
-    }
-  };
-
-  const existingAsset = assetId ? mockAssets[assetId] : null;
+  // No local mock asset. Fetch real asset details from backend when needed.
+  const existingAsset = null;
 
   // Form initial values
   const initialValues = {

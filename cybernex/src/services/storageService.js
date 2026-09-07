@@ -11,21 +11,6 @@
 
 import {
   APP_VERSION,
-  DEMO_CREDENTIALS,
-  SAMPLE_USERS,
-  SAMPLE_FACULTY,
-  SAMPLE_STUDENT_GROUPS,
-  SAMPLE_COURSES,
-  SAMPLE_LABS,
-  SAMPLE_ASSESSMENTS,
-  SAMPLE_RESULTS,
-  SAMPLE_ATTENDANCE,
-  SAMPLE_SCHEDULES,
-  SAMPLE_VIOLATIONS,
-  SAMPLE_NOTIFICATIONS,
-  SAMPLE_AUDIT_LOGS,
-  SAMPLE_BACKUPS,
-  SAMPLE_RESTRICTIONS,
   ROLES,
   PERMISSIONS
 } from '../utils/constants';
@@ -120,16 +105,18 @@ export const removeItem = (key) => {
 };
 
 const persistToBackend = async (endpoint, method, payload) => {
-  if (!getAuthToken()) return null;
+  if (!getAuthToken()) throw new Error('Authentication required');
 
   try {
-    return await apiRequest(endpoint, {
+    const res = await apiRequest(endpoint, {
       method,
       ...(payload !== undefined ? { body: JSON.stringify(payload) } : {})
     });
+    if (res === null || res === undefined) throw new Error(`Empty response from ${endpoint}`);
+    return res;
   } catch (error) {
-    console.warn(`Backend sync failed for ${endpoint}:`, error.message);
-    return null;
+    console.error(`Backend sync failed for ${endpoint}:`, error.message);
+    throw error;
   }
 };
 
@@ -149,191 +136,30 @@ export const clearAll = () => {
 // ===== DATA INITIALIZATION =====
 
 /**
- * Initialize mock data if not present
+ * Initialize the app with empty local state for real backend-backed usage.
+ * No demo or sample data is seeded here.
  */
-const mergeSeedData = (existing = [], seed = []) => {
-  const byId = new Map((existing || []).filter(item => item && item.id).map(item => [item.id, item]));
-  const merged = [...(existing || [])];
-
-  seed.forEach(item => {
-    if (byId.has(item.id)) {
-      const index = merged.findIndex(entry => entry.id === item.id);
-      if (index >= 0) {
-        merged[index] = { ...merged[index], ...item };
-      }
-      return;
-    }
-
-    merged.push(item);
-  });
-
-  return merged;
-};
-
 export const initializeMockData = () => {
-  // Check if data is already initialized
   const currentVersion = getItem(STORAGE_KEYS.APP_VERSION);
 
   if (currentVersion === APP_VERSION) {
     return;
   }
 
-  console.log('Initializing mock data...');
-
-  const existingUsers = getItem(STORAGE_KEYS.USERS, []);
-  const existingCourses = getItem(STORAGE_KEYS.COURSES, []);
-  const existingLabs = getItem(STORAGE_KEYS.LABS, []);
-
-  // Initialize users
-  if (!existingUsers.length) {
-    const users = SAMPLE_USERS.map(user => ({
-      ...user,
-      // Add custom permissions if they exist
-      permissions: user.role === ROLES.ADMIN
-        ? ADMIN_DEFAULT_PERMISSIONS
-        : user.role === ROLES.FACULTY
-          ? FACULTY_DEFAULT_PERMISSIONS
-          : STUDENT_DEFAULT_PERMISSIONS
-    }));
-    setItem(STORAGE_KEYS.USERS, users);
-  } else {
-    const mergedUsers = mergeSeedData(existingUsers, SAMPLE_USERS.map(user => ({
-      ...user,
-      permissions: user.role === ROLES.ADMIN
-        ? ADMIN_DEFAULT_PERMISSIONS
-        : user.role === ROLES.FACULTY
-          ? FACULTY_DEFAULT_PERMISSIONS
-          : STUDENT_DEFAULT_PERMISSIONS
-    })));
-    setItem(STORAGE_KEYS.USERS, mergedUsers);
-  }
-
-  // Keep the documented demo accounts usable after an app update while
-  // retaining all locally-created users and their own data.
-  const demoUserIds = new Set(['USER-001', 'USER-002', 'USER-003']);
-  const usersWithDemoCredentials = getItem(STORAGE_KEYS.USERS, []).map(user => {
-    const credentials = DEMO_CREDENTIALS[user.role];
-    return credentials && demoUserIds.has(user.id)
-      ? { ...user, email: credentials.email, password: credentials.password }
-      : user;
-  });
-  setItem(STORAGE_KEYS.USERS, usersWithDemoCredentials);
-
-  // Initialize faculty
-  if (!getItem(STORAGE_KEYS.FACULTY)) {
-    setItem(STORAGE_KEYS.FACULTY, SAMPLE_FACULTY);
-  }
-
-  // Initialize student groups
-  if (!getItem(STORAGE_KEYS.STUDENT_GROUPS)) {
-    setItem(STORAGE_KEYS.STUDENT_GROUPS, SAMPLE_STUDENT_GROUPS);
-  }
-
-  // Initialize courses, merging any newer built-in content so students get
-  // fresh learning modules without losing locally created records.
-  const mergedCourses = mergeSeedData(existingCourses, SAMPLE_COURSES);
-  setItem(STORAGE_KEYS.COURSES, mergedCourses);
-
-  // Initialize labs, merging any newer built-in labs so practice data stays up to date.
-  const mergedLabs = mergeSeedData(existingLabs, SAMPLE_LABS);
-  setItem(STORAGE_KEYS.LABS, mergedLabs);
-
-  // Initialize assessments
-  if (!getItem(STORAGE_KEYS.ASSESSMENTS)) {
-    setItem(STORAGE_KEYS.ASSESSMENTS, SAMPLE_ASSESSMENTS);
-  }
-
-  // Seed only the demo learner's level-appropriate assessment grants. Higher
-  // level assessments remain deliberately locked until faculty/admin grants
-  // access through the normal workflow.
-  if (!getItem(STORAGE_KEYS.ASSESSMENT_UNLOCKS)) {
-    const demoStudentId = SAMPLE_USERS.find(user => user.role === ROLES.STUDENT)?.id;
-    const demoGrants = Object.fromEntries(
-      SAMPLE_ASSESSMENTS.filter(assessment => assessment.level <= 4).map(assessment => [
-        assessment.id,
-        [{
-          id: `GRANT-SEED-${assessment.id}`,
-          studentId: demoStudentId,
-          assessmentId: assessment.id,
-          grantedBy: 'USER-001',
-          grantedAt: new Date().toISOString(),
-          status: 'active',
-          expiresAt: null,
-          attemptsAllowed: assessment.maxAttempts || assessment.attempts || 1,
-          attemptsUsed: 0
-        }]
-      ])
-    );
-    setItem(STORAGE_KEYS.ASSESSMENT_UNLOCKS, demoGrants);
-  }
-
-  // Initialize results
-  if (!getItem(STORAGE_KEYS.RESULTS)) {
-    setItem(STORAGE_KEYS.RESULTS, SAMPLE_RESULTS);
-  }
-
-  // Initialize attendance
-  if (!getItem(STORAGE_KEYS.ATTENDANCE)) {
-    setItem(STORAGE_KEYS.ATTENDANCE, SAMPLE_ATTENDANCE);
-  }
-
-  // Initialize schedules
-  if (!getItem(STORAGE_KEYS.SCHEDULES)) {
-    setItem(STORAGE_KEYS.SCHEDULES, SAMPLE_SCHEDULES);
-  }
-
-  // Initialize violations
-  if (!getItem(STORAGE_KEYS.VIOLATIONS)) {
-    setItem(STORAGE_KEYS.VIOLATIONS, SAMPLE_VIOLATIONS);
-  }
-
-  // Initialize notifications
-  if (!getItem(STORAGE_KEYS.NOTIFICATIONS)) {
-    setItem(STORAGE_KEYS.NOTIFICATIONS, SAMPLE_NOTIFICATIONS);
-  }
-
-  // Initialize audit logs
-  if (!getItem(STORAGE_KEYS.AUDIT_LOGS)) {
-    setItem(STORAGE_KEYS.AUDIT_LOGS, SAMPLE_AUDIT_LOGS);
-  }
-
-  // Initialize restrictions
-  if (!getItem(STORAGE_KEYS.RESTRICTIONS)) {
-    setItem(STORAGE_KEYS.RESTRICTIONS, SAMPLE_RESTRICTIONS);
-  }
-
-  // Initialize backups
-  if (!getItem(STORAGE_KEYS.BACKUPS)) {
-    setItem(STORAGE_KEYS.BACKUPS, SAMPLE_BACKUPS);
-  }
-
-  // Initialize settings
   if (!getItem(STORAGE_KEYS.SETTINGS)) {
     setItem(STORAGE_KEYS.SETTINGS, {
       theme: 'system',
-      notifications: {
-        email: true,
-        push: true,
-        sound: true,
-      },
-      assessment: {
-        autoSubmit: true,
-        showTimer: true,
-        enableProctoring: false,
-      },
-      dashboard: {
-        widgets: ['stats', 'progress', 'recent-activity', 'quick-actions'],
-      },
+      notifications: { email: true, push: true, sound: true },
+      assessment: { autoSubmit: true, showTimer: true, enableProctoring: false },
+      dashboard: { widgets: ['stats', 'progress', 'recent-activity', 'quick-actions'] },
       language: 'en',
     });
   }
 
-  // Initialize theme
   if (!getItem(STORAGE_KEYS.THEME)) {
     setItem(STORAGE_KEYS.THEME, 'system');
   }
 
-  // Initialize permissions
   if (!getItem(STORAGE_KEYS.PERMISSIONS)) {
     setItem(STORAGE_KEYS.PERMISSIONS, {
       [ROLES.ADMIN]: ADMIN_DEFAULT_PERMISSIONS,
@@ -342,451 +168,267 @@ export const initializeMockData = () => {
     });
   }
 
-  // Set app version
   setItem(STORAGE_KEYS.APP_VERSION, APP_VERSION);
-
-  console.log('Mock data initialized successfully');
 };
 
 // ===== DATA ACCESS FUNCTIONS =====
 
-// Users
-export const getUsers = () => getItem(STORAGE_KEYS.USERS, []);
-export const setUsers = (users) => setItem(STORAGE_KEYS.USERS, users);
+// Users (authoritative via backend)
+export const getUsers = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const res = await apiRequest('/users');
+  if (!Array.isArray(res)) throw new Error('Invalid response for users');
+  return res;
+};
+export const setUsers = (users) => {
+  console.warn('setUsers: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.USERS, users);
+};
 export const addUser = async (user) => {
-  const apiResult = await persistToBackend('/users', 'POST', user);
-  if (apiResult?.user) {
-    const users = getUsers();
-    setUsers([...users, apiResult.user]);
-    return apiResult.user;
-  }
-
-  const users = getUsers();
-  setUsers([...users, user]);
-  return user;
+  const res = await persistToBackend('/users', 'POST', user);
+  return res.user || res;
 };
 export const updateUser = async (userId, updates) => {
-  const apiResult = await persistToBackend(`/users/${userId}`, 'PUT', updates);
-  const users = getUsers();
-  const updatedUsers = users.map(user =>
-    user.id === userId ? { ...user, ...updates } : user
-  );
-  setUsers(updatedUsers);
-  const currentUser = updatedUsers.find(user => user.id === userId);
-
-  if (apiResult && currentUser) {
-    return currentUser;
-  }
-  return currentUser;
+  const res = await persistToBackend(`/users/${userId}`, 'PUT', updates);
+  return res.user || res;
 };
 export const deleteUser = async (userId) => {
-  await persistToBackend(`/users/${userId}`, 'DELETE');
-  const users = getUsers();
-  const filteredUsers = users.filter(user => user.id !== userId);
-  setUsers(filteredUsers);
-  return filteredUsers;
+  return await persistToBackend(`/users/${userId}`, 'DELETE');
 };
 
 // Courses
-export const getCourses = () => getItem(STORAGE_KEYS.COURSES, []);
-export const setCourses = (courses) => setItem(STORAGE_KEYS.COURSES, courses);
+export const getCourses = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const res = await apiRequest('/courses');
+  if (!Array.isArray(res)) throw new Error('Invalid response for courses');
+  return res;
+};
+export const setCourses = (courses) => {
+  console.warn('setCourses: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.COURSES, courses);
+};
 export const addCourse = async (course) => {
-  const apiResult = await persistToBackend('/courses', 'POST', course);
-  if (apiResult?.id) {
-    const courses = getCourses();
-    setCourses([...courses, { ...course, id: course.id || apiResult.id }]);
-    return { ...course, id: course.id || apiResult.id };
-  }
-
-  const courses = getCourses();
-  setCourses([...courses, course]);
-  return course;
+  const res = await persistToBackend('/courses', 'POST', course);
+  return res;
 };
 export const updateCourse = async (courseId, updates) => {
-  await persistToBackend(`/courses/${courseId}`, 'PUT', updates);
-  const courses = getCourses();
-  const updatedCourses = courses.map(course =>
-    course.id === courseId ? { ...course, ...updates } : course
-  );
-  setCourses(updatedCourses);
-  return updatedCourses.find(course => course.id === courseId);
+  const res = await persistToBackend(`/courses/${courseId}`, 'PUT', updates);
+  return res;
 };
 export const deleteCourse = async (courseId) => {
-  await persistToBackend(`/courses/${courseId}`, 'DELETE');
-  const courses = getCourses();
-  const filteredCourses = courses.filter(course => course.id !== courseId);
-  setCourses(filteredCourses);
-  return filteredCourses;
+  return await persistToBackend(`/courses/${courseId}`, 'DELETE');
 };
 
 // Lessons (stored within courses in our data model)
 // Exporting for consistency
-export const getLessons = () => {
-  const courses = getCourses();
+export const getLessons = async () => {
+  const courses = await getCourses();
   return courses.flatMap(course => course.modules?.flatMap(module => module.lessons) || []);
 };
 
 // Labs
-export const getLabs = () => getItem(STORAGE_KEYS.LABS, []);
-export const setLabs = (labs) => setItem(STORAGE_KEYS.LABS, labs);
-export const addLab = async (lab) => {
-  const apiResult = await persistToBackend('/labs', 'POST', lab);
-  if (apiResult?.id) {
-    const labs = getLabs();
-    setLabs([...labs, { ...lab, id: lab.id || apiResult.id }]);
-    return { ...lab, id: lab.id || apiResult.id };
-  }
-
-  const labs = getLabs();
-  setLabs([...labs, lab]);
-  return lab;
+export const getLabs = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const res = await apiRequest('/labs');
+  if (!Array.isArray(res)) throw new Error('Invalid response for labs');
+  return res;
 };
-export const updateLab = async (labId, updates) => {
-  await persistToBackend(`/labs/${labId}`, 'PUT', updates);
-  const labs = getLabs();
-  const updatedLabs = labs.map(lab =>
-    lab.id === labId ? { ...lab, ...updates } : lab
-  );
-  setLabs(updatedLabs);
-  return updatedLabs.find(lab => lab.id === labId);
+export const setLabs = (labs) => {
+  console.warn('setLabs: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.LABS, labs);
 };
-export const deleteLab = async (labId) => {
-  await persistToBackend(`/labs/${labId}`, 'DELETE');
-  const labs = getLabs();
-  const filteredLabs = labs.filter(lab => lab.id !== labId);
-  setLabs(filteredLabs);
-  return filteredLabs;
-};
+export const addLab = async (lab) => await persistToBackend('/labs', 'POST', lab);
+export const updateLab = async (labId, updates) => await persistToBackend(`/labs/${labId}`, 'PUT', updates);
+export const deleteLab = async (labId) => await persistToBackend(`/labs/${labId}`, 'DELETE');
 
 // Assessments
-export const getAssessments = () => getItem(STORAGE_KEYS.ASSESSMENTS, []);
-export const setAssessments = (assessments) => setItem(STORAGE_KEYS.ASSESSMENTS, assessments);
-export const addAssessment = async (assessment) => {
-  const apiResult = await persistToBackend('/assessments', 'POST', assessment);
-  if (apiResult?.id) {
-    const assessments = getAssessments();
-    setAssessments([...assessments, { ...assessment, id: assessment.id || apiResult.id }]);
-    return { ...assessment, id: assessment.id || apiResult.id };
-  }
-
-  const assessments = getAssessments();
-  setAssessments([...assessments, assessment]);
-  return assessment;
+export const getAssessments = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const res = await apiRequest('/assessments');
+  if (!Array.isArray(res)) throw new Error('Invalid response for assessments');
+  return res;
 };
-export const updateAssessment = async (assessmentId, updates) => {
-  await persistToBackend(`/assessments/${assessmentId}`, 'PUT', updates);
-  const assessments = getAssessments();
-  const updatedAssessments = assessments.map(assessment =>
-    assessment.id === assessmentId ? { ...assessment, ...updates } : assessment
-  );
-  setAssessments(updatedAssessments);
-  return updatedAssessments.find(assessment => assessment.id === assessmentId);
+export const setAssessments = (assessments) => {
+  console.warn('setAssessments: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.ASSESSMENTS, assessments);
 };
-export const deleteAssessment = async (assessmentId) => {
-  await persistToBackend(`/assessments/${assessmentId}`, 'DELETE');
-  const assessments = getAssessments();
-  const filteredAssessments = assessments.filter(assessment => assessment.id !== assessmentId);
-  setAssessments(filteredAssessments);
-  return filteredAssessments;
-};
+export const addAssessment = async (assessment) => await persistToBackend('/assessments', 'POST', assessment);
+export const updateAssessment = async (assessmentId, updates) => await persistToBackend(`/assessments/${assessmentId}`, 'PUT', updates);
+export const deleteAssessment = async (assessmentId) => await persistToBackend(`/assessments/${assessmentId}`, 'DELETE');
 
 // Results
-export const getResults = () => getItem(STORAGE_KEYS.RESULTS, []);
-export const setResults = (results) => setItem(STORAGE_KEYS.RESULTS, results);
-export const addResult = async (result) => {
-  const apiResult = await persistToBackend('/results', 'POST', result);
-  if (apiResult?.id) {
-    const results = getResults();
-    setResults([...results, { ...result, id: result.id || apiResult.id }]);
-    return { ...result, id: result.id || apiResult.id };
-  }
-
-  const results = getResults();
-  setResults([...results, result]);
-  return result;
+export const getResults = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const res = await apiRequest('/results');
+  if (!Array.isArray(res)) throw new Error('Invalid response for results');
+  return res;
 };
-export const updateResult = async (resultId, updates) => {
-  await persistToBackend(`/results/${resultId}`, 'PUT', updates);
-  const results = getResults();
-  const updatedResults = results.map(result =>
-    result.id === resultId ? { ...result, ...updates } : result
-  );
-  setResults(updatedResults);
-  return updatedResults.find(result => result.id === resultId);
+export const setResults = (results) => {
+  console.warn('setResults: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.RESULTS, results);
 };
-export const deleteResult = async (resultId) => {
-  await persistToBackend(`/results/${resultId}`, 'DELETE');
-  const results = getResults();
-  const filteredResults = results.filter(result => result.id !== resultId);
-  setResults(filteredResults);
-  return filteredResults;
-};
+export const addResult = async (result) => await persistToBackend('/results', 'POST', result);
+export const updateResult = async (resultId, updates) => await persistToBackend(`/results/${resultId}`, 'PUT', updates);
+export const deleteResult = async (resultId) => await persistToBackend(`/results/${resultId}`, 'DELETE');
 
 // Attendance
-export const getAttendance = () => getItem(STORAGE_KEYS.ATTENDANCE, []);
-export const setAttendance = (attendance) => setItem(STORAGE_KEYS.ATTENDANCE, attendance);
-export const addAttendance = async (record) => {
-  const apiResult = await persistToBackend('/attendance', 'POST', record);
-  if (apiResult?.id) {
-    const attendance = getAttendance();
-    setAttendance([...attendance, { ...record, id: record.id || apiResult.id }]);
-    return { ...record, id: record.id || apiResult.id };
-  }
+export const getAttendance = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const res = await apiRequest('/attendance');
+  if (!Array.isArray(res)) throw new Error('Invalid response for attendance');
+  return res;
+};
+export const setAttendance = (attendance) => {
+  console.warn('setAttendance: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.ATTENDANCE, attendance);
+};
+export const addAttendance = async (record) => await persistToBackend('/attendance', 'POST', record);
+export const updateAttendance = async (recordId, updates) => await persistToBackend(`/attendance/${recordId}`, 'PUT', updates);
+export const deleteAttendance = async (recordId) => await persistToBackend(`/attendance/${recordId}`, 'DELETE');
 
-  const attendance = getAttendance();
-  setAttendance([...attendance, record]);
-  return record;
+// Schedules (authoritative via backend)
+export const getSchedules = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve schedules');
+  const res = await apiRequest('/schedules');
+  if (!Array.isArray(res)) throw new Error('Invalid response for schedules');
+  return res;
 };
-export const updateAttendance = async (recordId, updates) => {
-  await persistToBackend(`/attendance/${recordId}`, 'PUT', updates);
-  const attendance = getAttendance();
-  const updatedAttendance = attendance.map(record =>
-    record.id === recordId ? { ...record, ...updates } : record
-  );
-  setAttendance(updatedAttendance);
-  return updatedAttendance.find(record => record.id === recordId);
+export const setSchedules = (schedules) => {
+  console.warn('setSchedules: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.SCHEDULES, schedules);
 };
-export const deleteAttendance = async (recordId) => {
-  await persistToBackend(`/attendance/${recordId}`, 'DELETE');
-  const attendance = getAttendance();
-  const filteredAttendance = attendance.filter(record => record.id !== recordId);
-  setAttendance(filteredAttendance);
-  return filteredAttendance;
-};
-
-// Schedules
-export const getSchedules = () => getItem(STORAGE_KEYS.SCHEDULES, []);
-export const setSchedules = (schedules) => setItem(STORAGE_KEYS.SCHEDULES, schedules);
-export const addSchedule = async (schedule) => {
-  const apiResult = await persistToBackend('/schedules', 'POST', schedule);
-  if (apiResult?.id) {
-    const schedules = getSchedules();
-    setSchedules([...schedules, { ...schedule, id: schedule.id || apiResult.id }]);
-    return { ...schedule, id: schedule.id || apiResult.id };
-  }
-
-  const schedules = getSchedules();
-  setSchedules([...schedules, schedule]);
-  return schedule;
-};
-export const updateSchedule = async (scheduleId, updates) => {
-  await persistToBackend(`/schedules/${scheduleId}`, 'PUT', updates);
-  const schedules = getSchedules();
-  const updatedSchedules = schedules.map(schedule =>
-    schedule.id === scheduleId ? { ...schedule, ...updates } : schedule
-  );
-  setSchedules(updatedSchedules);
-  return updatedSchedules.find(schedule => schedule.id === scheduleId);
-};
-export const deleteSchedule = async (scheduleId) => {
-  await persistToBackend(`/schedules/${scheduleId}`, 'DELETE');
-  const schedules = getSchedules();
-  const filteredSchedules = schedules.filter(schedule => schedule.id !== scheduleId);
-  setSchedules(filteredSchedules);
-  return filteredSchedules;
-};
+export const addSchedule = async (schedule) => await persistToBackend('/schedules', 'POST', schedule);
+export const updateSchedule = async (scheduleId, updates) => await persistToBackend(`/schedules/${scheduleId}`, 'PUT', updates);
+export const deleteSchedule = async (scheduleId) => await persistToBackend(`/schedules/${scheduleId}`, 'DELETE');
 
 // Violations
-export const getViolations = () => getItem(STORAGE_KEYS.VIOLATIONS, []);
-export const setViolations = (violations) => setItem(STORAGE_KEYS.VIOLATIONS, violations);
-export const addViolation = async (violation) => {
-  const apiResult = await persistToBackend('/violations', 'POST', violation);
-  if (apiResult?.id) {
-    const violations = getViolations();
-    setViolations([...violations, { ...violation, id: violation.id || apiResult.id }]);
-    return { ...violation, id: violation.id || apiResult.id };
-  }
-
-  const violations = getViolations();
-  setViolations([...violations, violation]);
-  return violation;
+export const getViolations = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve violations');
+  const res = await apiRequest('/violations');
+  if (!Array.isArray(res)) throw new Error('Invalid response for violations');
+  return res;
 };
-export const updateViolation = async (violationId, updates) => {
-  await persistToBackend(`/violations/${violationId}`, 'PUT', updates);
-  const violations = getViolations();
-  const updatedViolations = violations.map(violation =>
-    violation.id === violationId ? { ...violation, ...updates } : violation
-  );
-  setViolations(updatedViolations);
-  return updatedViolations.find(violation => violation.id === violationId);
+export const setViolations = (violations) => {
+  console.warn('setViolations: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.VIOLATIONS, violations);
 };
-export const deleteViolation = async (violationId) => {
-  await persistToBackend(`/violations/${violationId}`, 'DELETE');
-  const violations = getViolations();
-  const filteredViolations = violations.filter(violation => violation.id !== violationId);
-  setViolations(filteredViolations);
-  return filteredViolations;
-};
+export const addViolation = async (violation) => await persistToBackend('/violations', 'POST', violation);
+export const updateViolation = async (violationId, updates) => await persistToBackend(`/violations/${violationId}`, 'PUT', updates);
+export const deleteViolation = async (violationId) => await persistToBackend(`/violations/${violationId}`, 'DELETE');
 
 // Notifications
-export const getNotifications = () => getItem(STORAGE_KEYS.NOTIFICATIONS, []);
-export const setNotifications = (notifications) => setItem(STORAGE_KEYS.NOTIFICATIONS, notifications);
-export const addNotification = async (notification) => {
-  const apiResult = await persistToBackend('/notifications', 'POST', notification);
-  if (apiResult?.id) {
-    const notifications = getNotifications();
-    setNotifications([{ ...notification, id: notification.id || apiResult.id }, ...notifications]);
-    return { ...notification, id: notification.id || apiResult.id };
-  }
-
-  const notifications = getNotifications();
-  setNotifications([notification, ...notifications]);
-  return notification;
+export const getNotifications = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve notifications');
+  const res = await apiRequest('/notifications');
+  if (!Array.isArray(res)) throw new Error('Invalid response for notifications');
+  return res;
 };
-export const updateNotification = async (notificationId, updates) => {
-  await persistToBackend(`/notifications/${notificationId}`, 'PUT', updates);
-  const notifications = getNotifications();
-  const updatedNotifications = notifications.map(notification =>
-    notification.id === notificationId ? { ...notification, ...updates } : notification
-  );
-  setNotifications(updatedNotifications);
-  return updatedNotifications.find(notification => notification.id === notificationId);
+export const setNotifications = (notifications) => {
+  console.warn('setNotifications: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.NOTIFICATIONS, notifications);
 };
-export const deleteNotification = async (notificationId) => {
-  await persistToBackend(`/notifications/${notificationId}`, 'DELETE');
-  const notifications = getNotifications();
-  const filteredNotifications = notifications.filter(n => n.id !== notificationId);
-  setNotifications(filteredNotifications);
-  return filteredNotifications;
-};
+export const addNotification = async (notification) => await persistToBackend('/notifications', 'POST', notification);
+export const updateNotification = async (notificationId, updates) => await persistToBackend(`/notifications/${notificationId}`, 'PUT', updates);
+export const deleteNotification = async (notificationId) => await persistToBackend(`/notifications/${notificationId}`, 'DELETE');
 
 // Audit Logs
-export const getAuditLogs = () => getItem(STORAGE_KEYS.AUDIT_LOGS, []);
-export const setAuditLogs = (logs) => setItem(STORAGE_KEYS.AUDIT_LOGS, logs);
-export const addAuditLog = (log) => {
-  const logs = getAuditLogs();
-  setAuditLogs([log, ...logs]); // Add to beginning
-  return log;
+export const getAuditLogs = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve audit logs');
+  const res = await apiRequest('/audit-logs');
+  if (!Array.isArray(res)) throw new Error('Invalid response for audit logs');
+  return res;
+};
+export const setAuditLogs = (logs) => {
+  console.warn('setAuditLogs: local cache write (non-authoritative). Audit logs must be retrieved from the server.');
+  return setItem(STORAGE_KEYS.AUDIT_LOGS, logs);
+};
+export const addAuditLog = async (log) => {
+  if (!getAuthToken()) throw new Error('Authentication required to add audit log');
+  const payload = {
+    actor_id: log.actorId || log.userId || null,
+    action: log.action || '',
+    entity: log.target || log.entity || '',
+    details: log.details || {}
+  };
+  const res = await apiRequest('/audit-logs', { method: 'POST', body: JSON.stringify(payload) });
+  if (!res) throw new Error('Failed to persist audit log');
+  return res;
 };
 
 // Restrictions
-export const getRestrictions = () => getItem(STORAGE_KEYS.RESTRICTIONS, []);
-export const setRestrictions = (restrictions) => setItem(STORAGE_KEYS.RESTRICTIONS, restrictions);
-export const addRestriction = async (restriction) => {
-  const apiResult = await persistToBackend('/restrictions', 'POST', restriction);
-  if (apiResult?.id) {
-    const restrictions = getRestrictions();
-    setRestrictions([...restrictions, { ...restriction, id: restriction.id || apiResult.id }]);
-    return { ...restriction, id: restriction.id || apiResult.id };
-  }
-
-  const restrictions = getRestrictions();
-  setRestrictions([...restrictions, restriction]);
-  return restriction;
+export const getRestrictions = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve restrictions');
+  const res = await apiRequest('/restrictions');
+  if (!Array.isArray(res)) throw new Error('Invalid response for restrictions');
+  return res;
 };
-export const updateRestriction = async (restrictionId, updates) => {
-  await persistToBackend(`/restrictions/${restrictionId}`, 'PUT', updates);
-  const restrictions = getRestrictions();
-  const updatedRestrictions = restrictions.map(restriction =>
-    restriction.id === restrictionId ? { ...restriction, ...updates } : restriction
-  );
-  setRestrictions(updatedRestrictions);
-  return updatedRestrictions.find(r => r.id === restrictionId);
+export const setRestrictions = (restrictions) => {
+  console.warn('setRestrictions: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.RESTRICTIONS, restrictions);
 };
-export const deleteRestriction = async (restrictionId) => {
-  await persistToBackend(`/restrictions/${restrictionId}`, 'DELETE');
-  const restrictions = getRestrictions();
-  const filteredRestrictions = restrictions.filter(r => r.id !== restrictionId);
-  setRestrictions(filteredRestrictions);
-  return filteredRestrictions;
-};
+export const addRestriction = async (restriction) => await persistToBackend('/restrictions', 'POST', restriction);
+export const updateRestriction = async (restrictionId, updates) => await persistToBackend(`/restrictions/${restrictionId}`, 'PUT', updates);
+export const deleteRestriction = async (restrictionId) => await persistToBackend(`/restrictions/${restrictionId}`, 'DELETE');
 
 // Backups
-export const getBackups = () => getItem(STORAGE_KEYS.BACKUPS, []);
-export const setBackups = (backups) => setItem(STORAGE_KEYS.BACKUPS, backups);
-export const addBackup = async (backup) => {
-  const apiResult = await persistToBackend('/backups', 'POST', backup);
-  if (apiResult?.id) {
-    const backups = getBackups();
-    setBackups([{ ...backup, id: backup.id || apiResult.id }, ...backups]);
-    return { ...backup, id: backup.id || apiResult.id };
-  }
-
-  const backups = getBackups();
-  setBackups([backup, ...backups]);
-  return backup;
+export const getBackups = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve backups');
+  const res = await apiRequest('/backups');
+  if (!Array.isArray(res)) throw new Error('Invalid response for backups');
+  return res;
 };
-export const deleteBackup = async (backupId) => {
-  await persistToBackend(`/backups/${backupId}`, 'DELETE');
-  const backups = getBackups();
-  const filteredBackups = backups.filter(b => b.id !== backupId);
-  setBackups(filteredBackups);
-  return filteredBackups;
+export const setBackups = (backups) => {
+  console.warn('setBackups: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.BACKUPS, backups);
 };
+export const addBackup = async (backup) => await persistToBackend('/backups', 'POST', backup);
+export const deleteBackup = async (backupId) => await persistToBackend(`/backups/${backupId}`, 'DELETE');
 
 // Faculty
-export const getFaculty = () => getItem(STORAGE_KEYS.FACULTY, []);
-export const setFaculty = (faculty) => setItem(STORAGE_KEYS.FACULTY, faculty);
-export const addFaculty = async (facultyMember) => {
-  const apiResult = await persistToBackend('/faculty', 'POST', facultyMember);
-  if (apiResult?.id) {
-    const faculty = getFaculty();
-    setFaculty([...faculty, { ...facultyMember, id: facultyMember.id || apiResult.id }]);
-    return { ...facultyMember, id: facultyMember.id || apiResult.id };
-  }
-
-  const faculty = getFaculty();
-  setFaculty([...faculty, facultyMember]);
-  return facultyMember;
+export const getFaculty = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve faculty');
+  const res = await apiRequest('/faculty');
+  if (!Array.isArray(res)) throw new Error('Invalid response for faculty');
+  return res;
 };
-export const updateFaculty = async (facultyId, updates) => {
-  await persistToBackend(`/faculty/${facultyId}`, 'PUT', updates);
-  const faculty = getFaculty();
-  const updatedFaculty = faculty.map(f =>
-    f.id === facultyId ? { ...f, ...updates } : f
-  );
-  setFaculty(updatedFaculty);
-  return updatedFaculty.find(f => f.id === facultyId);
+export const setFaculty = (faculty) => {
+  console.warn('setFaculty: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.FACULTY, faculty);
 };
-export const deleteFaculty = async (facultyId) => {
-  await persistToBackend(`/faculty/${facultyId}`, 'DELETE');
-  const faculty = getFaculty();
-  const filteredFaculty = faculty.filter(f => f.id !== facultyId);
-  setFaculty(filteredFaculty);
-  return filteredFaculty;
-};
+export const addFaculty = async (facultyMember) => await persistToBackend('/faculty', 'POST', facultyMember);
+export const updateFaculty = async (facultyId, updates) => await persistToBackend(`/faculty/${facultyId}`, 'PUT', updates);
+export const deleteFaculty = async (facultyId) => await persistToBackend(`/faculty/${facultyId}`, 'DELETE');
 
 // Student Groups
-export const getStudentGroups = () => getItem(STORAGE_KEYS.STUDENT_GROUPS, []);
-export const setStudentGroups = (groups) => setItem(STORAGE_KEYS.STUDENT_GROUPS, groups);
-export const addStudentGroup = async (group) => {
-  const apiResult = await persistToBackend('/student-groups', 'POST', group);
-  if (apiResult?.id) {
-    const groups = getStudentGroups();
-    setStudentGroups([...groups, { ...group, id: group.id || apiResult.id }]);
-    return { ...group, id: group.id || apiResult.id };
-  }
-
-  const groups = getStudentGroups();
-  setStudentGroups([...groups, group]);
-  return group;
+export const getStudentGroups = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve student groups');
+  const res = await apiRequest('/student-groups');
+  if (!Array.isArray(res)) throw new Error('Invalid response for student groups');
+  return res;
 };
-export const updateStudentGroup = async (groupId, updates) => {
-  await persistToBackend(`/student-groups/${groupId}`, 'PUT', updates);
-  const groups = getStudentGroups();
-  const updatedGroups = groups.map(group =>
-    group.id === groupId ? { ...group, ...updates } : group
-  );
-  setStudentGroups(updatedGroups);
-  return updatedGroups.find(g => g.id === groupId);
+export const setStudentGroups = (groups) => {
+  console.warn('setStudentGroups: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.STUDENT_GROUPS, groups);
 };
-export const deleteStudentGroup = async (groupId) => {
-  await persistToBackend(`/student-groups/${groupId}`, 'DELETE');
-  const groups = getStudentGroups();
-  const filteredGroups = groups.filter(g => g.id !== groupId);
-  setStudentGroups(filteredGroups);
-  return filteredGroups;
-};
+export const addStudentGroup = async (group) => await persistToBackend('/student-groups', 'POST', group);
+export const updateStudentGroup = async (groupId, updates) => await persistToBackend(`/student-groups/${groupId}`, 'PUT', updates);
+export const deleteStudentGroup = async (groupId) => await persistToBackend(`/student-groups/${groupId}`, 'DELETE');
 
 // Settings
-export const getSettings = () => getItem(STORAGE_KEYS.SETTINGS, {});
-export const setSettings = (settings) => setItem(STORAGE_KEYS.SETTINGS, settings);
+export const getSettings = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve settings');
+  const res = await apiRequest('/settings');
+  return res || {};
+};
+export const setSettings = async (settings) => {
+  if (!getAuthToken()) throw new Error('Authentication required to update settings');
+  const res = await persistToBackend('/settings', 'POST', settings);
+  // update local cache for UI only
+  try { setItem(STORAGE_KEYS.SETTINGS, settings); } catch (e) { /* ignore cache failures */ }
+  return res;
+};
 export const updateSettings = async (updates) => {
-  const apiResult = await persistToBackend('/settings', 'POST', updates);
-  const settings = getSettings();
-  const merged = { ...settings, ...updates };
-  setSettings(merged);
-  return merged;
+  return await setSettings(updates);
 };
 
 // Theme
@@ -794,12 +436,59 @@ export const getTheme = () => getItem(STORAGE_KEYS.THEME, 'system');
 export const setTheme = (theme) => setItem(STORAGE_KEYS.THEME, theme);
 
 // Permissions
-export const getPermissions = () => getItem(STORAGE_KEYS.PERMISSIONS, {});
-export const setPermissions = (permissions) => setItem(STORAGE_KEYS.PERMISSIONS, permissions);
-export const updateRolePermissions = (role, permissions) => {
-  const allPermissions = getPermissions();
-  setPermissions({ ...allPermissions, [role]: permissions });
-  return { ...allPermissions, [role]: permissions };
+export const getPermissions = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve permissions');
+  const res = await apiRequest('/role-resources');
+
+  if (!Array.isArray(res)) {
+    return res?.resources || {};
+  }
+
+  const grouped = {};
+  res.forEach((resource) => {
+    const role = resource?.role || 'student';
+    if (!grouped[role]) grouped[role] = [];
+    grouped[role].push(resource.path || resource.name || resource.element || '/');
+  });
+
+  return grouped;
+};
+export const setPermissions = (permissions) => {
+  console.warn('setPermissions: local cache write (non-authoritative). Use backend endpoints for authoritative changes.');
+  return setItem(STORAGE_KEYS.PERMISSIONS, permissions);
+};
+export const updateRolePermissions = async (role, permissions) => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+
+  const items = Array.isArray(permissions) ? permissions : [];
+  const lookLikeResources = items.some((item) => typeof item === 'string' && item.startsWith('/'));
+
+  if (lookLikeResources) {
+    const normalizedResources = items.map((item, index) => {
+      const path = typeof item === 'string' ? item : (item?.path || item?.name || item?.element || '/');
+      return {
+        path,
+        name: typeof item === 'string' ? path : (item?.name || path),
+        icon: typeof item === 'string' ? '' : (item?.icon || ''),
+        menu: typeof item === 'string' ? true : Boolean(item?.menu),
+        element: typeof item === 'string' ? path : (item?.element || path),
+        activity: typeof item === 'string' ? 0 : Number(item?.activity ?? 0),
+        sort_order: typeof item === 'string' ? index + 1 : Number(item?.sort_order ?? index + 1),
+      };
+    });
+
+    const res = await apiRequest(`/role-resources/${encodeURIComponent(role)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ resources: normalizedResources })
+    });
+
+    return res?.resources || res || [];
+  }
+
+  const matrix = getItem(STORAGE_KEYS.PERMISSIONS, {});
+  matrix[role] = Array.isArray(items) ? items : [];
+  setItem(STORAGE_KEYS.PERMISSIONS, matrix);
+  return matrix[role];
 };
 
 // Assessment access grants. The storage key keeps its legacy name so existing
@@ -812,84 +501,82 @@ const normalizeGrant = (grant, assessmentId, studentId) => {
   return { status: 'active', expiresAt: null, attemptsAllowed: 1, attemptsUsed: 0, ...grant, assessmentId, studentId: grant.studentId || studentId };
 };
 
-export const getAssessmentUnlocks = () => {
-  const raw = getItem(STORAGE_KEYS.ASSESSMENT_UNLOCKS, {});
-  return Object.fromEntries(Object.entries(raw).map(([assessmentId, grants]) => [
-    assessmentId,
-    (Array.isArray(grants) ? grants : []).map(grant => normalizeGrant(grant, assessmentId, typeof grant === 'string' ? grant : grant.studentId))
-  ]));
+export const getAssessmentUnlocks = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve assessment unlocks');
+  const grants = await apiRequest('/access-grants');
+  // normalize to map by assessmentId
+  const map = {};
+  (grants || []).forEach(g => {
+    const aid = g.assessment_id || g.assessmentId;
+    if (!aid) return;
+    if (!map[aid]) map[aid] = [];
+    map[aid].push(g);
+  });
+  // Optionally cache locally (non-authoritative)
+  setAssessmentUnlocks(map);
+  return map;
 };
 export const setAssessmentUnlocks = (unlocks) => setItem(STORAGE_KEYS.ASSESSMENT_UNLOCKS, unlocks);
-export const unlockAssessmentForStudent = (assessmentId, studentId, options = {}) => {
-  const unlocks = getAssessmentUnlocks();
-  const previous = (unlocks[assessmentId] || []).filter(grant => grant.studentId !== studentId);
-  const grant = normalizeGrant({
-    id: `GRANT-${Date.now()}`,
-    studentId,
-    assessmentId,
-    grantedBy: options.grantedBy || 'system',
-    grantedAt: new Date().toISOString(),
-    status: 'active',
-    expiresAt: options.expiresAt || null,
-    attemptsAllowed: Math.max(1, Number(options.attemptsAllowed) || 1),
-    attemptsUsed: Number(options.attemptsUsed) || 0,
-    // null means use the assessment default. A numeric value is an explicit
-    // per-student duration override, in minutes.
-    durationOverride: Number.isFinite(Number(options.durationOverride)) && Number(options.durationOverride) > 0
-      ? Number(options.durationOverride)
-      : null
-  }, assessmentId, studentId);
-  const updatedUnlocks = {
-    ...unlocks,
-    [assessmentId]: [...previous, grant]
+// Access grants - server-backed implementations
+export const unlockAssessmentForStudent = async (assessmentId, studentId, options = {}) => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const payload = {
+    student_id: studentId,
+    assessment_id: assessmentId,
+    expires_at: options.expiresAt || null
   };
-  setAssessmentUnlocks(updatedUnlocks);
-  return updatedUnlocks;
-};
-export const lockAssessmentForStudent = (assessmentId, studentId) => {
-  const unlocks = getAssessmentUnlocks();
-  const updatedUnlocks = {
-    ...unlocks,
-    [assessmentId]: (unlocks[assessmentId] || []).map(grant =>
-      grant.studentId === studentId ? { ...grant, status: 'revoked', revokedAt: new Date().toISOString() } : grant
-    )
-  };
-  setAssessmentUnlocks(updatedUnlocks);
-  return updatedUnlocks;
-};
-export const isAssessmentUnlockedForStudent = (assessmentId, studentId) => {
-  const unlocks = getAssessmentUnlocks();
-  const grant = (unlocks[assessmentId] || []).find(item => item.studentId === studentId);
-  if (!grant || grant.status !== 'active') return false;
-  if (grant.expiresAt && new Date(grant.expiresAt) <= new Date()) return false;
-  return grant.attemptsUsed < grant.attemptsAllowed;
+  const res = await apiRequest('/access-grants', { method: 'POST', body: JSON.stringify(payload) });
+  // Return created grant ID or server response
+  return res || null;
 };
 
-export const getAssessmentAccessForStudent = (assessmentId, studentId) => {
-  const grant = (getAssessmentUnlocks()[assessmentId] || []).find(item => item.studentId === studentId);
+export const lockAssessmentForStudent = async (assessmentId, studentId) => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  // Find existing grant for student and assessment
+  const grants = await apiRequest(`/access-grants/${encodeURIComponent(studentId)}`);
+  const grant = (grants || []).find(g => g.assessment_id === assessmentId || g.assessmentId === assessmentId);
+  if (!grant) throw new Error('No access grant found to lock');
+  const id = grant.id || grant.ID || grant.id;
+  await apiRequest(`/access-grants/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ unlocked: false }) });
+  return { id, locked: true };
+};
+
+export const isAssessmentUnlockedForStudent = async (assessmentId, studentId) => {
+  if (!getAuthToken()) return false;
+  const grants = await apiRequest(`/access-grants/${encodeURIComponent(studentId)}`);
+  const grant = (grants || []).find(g => g.assessment_id === assessmentId || g.assessmentId === assessmentId);
+  if (!grant) return false;
+  if (grant.unlocked === 0 || grant.unlocked === false) return false;
+  if (grant.expires_at && new Date(grant.expires_at) <= new Date()) return false;
+  return true;
+};
+
+export const getAssessmentAccessForStudent = async (assessmentId, studentId) => {
+  if (!getAuthToken()) return null;
+  const grants = await apiRequest(`/access-grants/${encodeURIComponent(studentId)}`);
+  const grant = (grants || []).find(g => g.assessment_id === assessmentId || g.assessmentId === assessmentId);
+  if (!grant) return null;
+  const status = (grant.unlocked === 0 || grant.unlocked === false) ? 'revoked' : (grant.expires_at && new Date(grant.expires_at) <= new Date() ? 'expired' : 'open');
+  return { ...grant, status };
+};
+
+export const recordAssessmentAttempt = async (assessmentId, studentId) => {
+  // The backend currently does not manage attempt counters in `access_grants`.
+  // For now record an audit log server-side and return a simple marker.
+  if (!getAuthToken()) throw new Error('Authentication required');
+  await apiRequest('/audit-logs', { method: 'POST', body: JSON.stringify({ action: 'ASSESSMENT_ATTEMPT', entity: 'Assessment', details: { assessmentId, studentId } }) });
+  return { recorded: true };
+};
+
+// Synchronous cached helper for code that expects immediate checks (uses local cache)
+export const getCachedAssessmentAccessForStudent = (assessmentId, studentId) => {
+  const unlocks = getItem(STORAGE_KEYS.ASSESSMENT_UNLOCKS, {});
+  const grant = (unlocks[assessmentId] || []).find(g => g.studentId === studentId || g.student_id === studentId);
   if (!grant) return null;
   const isExpired = grant.expiresAt && new Date(grant.expiresAt) <= new Date();
   if (isExpired) return { ...grant, status: 'expired' };
-  if (grant.status !== 'active') return grant;
-  if (grant.attemptsUsed >= grant.attemptsAllowed) return { ...grant, status: 'submitted' };
+  if (grant.status !== 'active' && grant.unlocked !== 1 && grant.unlocked !== true) return { ...grant, status: 'revoked' };
   return { ...grant, status: 'open' };
-};
-
-export const recordAssessmentAttempt = (assessmentId, studentId) => {
-  const unlocks = getAssessmentUnlocks();
-  const grants = unlocks[assessmentId] || [];
-  const grant = grants.find(item => item.studentId === studentId && item.status === 'active');
-  if (!grant || !isAssessmentUnlockedForStudent(assessmentId, studentId)) {
-    throw new Error('No active assessment access grant is available');
-  }
-  const updatedUnlocks = {
-    ...unlocks,
-    [assessmentId]: grants.map(item => item.id === grant.id
-      ? { ...item, attemptsUsed: item.attemptsUsed + 1, lastAttemptAt: new Date().toISOString() }
-      : item)
-  };
-  setAssessmentUnlocks(updatedUnlocks);
-  return updatedUnlocks[assessmentId].find(item => item.id === grant.id);
 };
 
 // ===== ASSESSMENT GLOBAL POLICY =====
@@ -926,59 +613,61 @@ export const setGlobalAssessmentPolicy = (policy, updatedBy = null) => {
 // the current time is before endsAt, every student may enter. Per-student
 // grants from unlockAssessmentForStudent still work for individual
 // exceptions/extensions on top of this.
-export const getAssessmentSessions = () => getItem(STORAGE_KEYS.ASSESSMENT_SESSIONS, {});
+export const getAssessmentSessions = async () => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve assessment sessions');
+  const res = await apiRequest('/assessment-sessions');
+  if (!Array.isArray(res)) throw new Error('Invalid response for assessment sessions');
+  // normalize to map by assessmentId for cache
+  const map = {};
+  (res || []).forEach(s => {
+    const aid = s.assessment_id || s.assessmentId;
+    if (!aid) return;
+    map[aid] = s;
+  });
+  setAssessmentSessions(map);
+  return map;
+};
 export const setAssessmentSessions = (sessions) => setItem(STORAGE_KEYS.ASSESSMENT_SESSIONS, sessions);
 
-export const getAssessmentSession = (assessmentId) => {
-  const sessions = getAssessmentSessions();
+export const getCachedAssessmentSession = (assessmentId) => {
+  const sessions = getItem(STORAGE_KEYS.ASSESSMENT_SESSIONS, {});
   return sessions[assessmentId] || null;
 };
 
-export const startAssessmentSession = (assessmentId, options = {}) => {
-  const sessions = getAssessmentSessions();
-  const durationMinutes = Number(options.durationMinutes) > 0 ? Number(options.durationMinutes) : null;
-  const startedAt = new Date().toISOString();
-  const session = {
-    isLive: true,
-    startedAt,
-    startedBy: options.startedBy || 'system',
-    endsAt: durationMinutes ? new Date(Date.now() + durationMinutes * 60000).toISOString() : null,
-    timeLimitOverride: Number(options.timeLimitOverride) > 0 ? Number(options.timeLimitOverride) : null,
-    fullScreenRequired: typeof options.fullScreenRequired === 'boolean' ? options.fullScreenRequired : null,
-    maxViolations: Number(options.maxViolations) > 0 ? Number(options.maxViolations) : null,
-    questionsPerAttempt: Number(options.questionsPerAttempt) > 0 ? Number(options.questionsPerAttempt) : null,
+export const startAssessmentSession = async (assessmentId, options = {}) => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const payload = {
+    assessment_id: assessmentId,
+    is_live: true,
+    started_by: options.startedBy || null,
+    ends_at: options.endsAt || null,
+    time_limit_override: options.timeLimitOverride || null,
+    full_screen_required: options.fullScreenRequired || false,
+    max_violations: options.maxViolations || null,
+    questions_per_attempt: options.questionsPerAttempt || null
   };
-  const updated = { ...sessions, [assessmentId]: session };
-  setAssessmentSessions(updated);
-  return session;
+  const res = await apiRequest('/assessment-sessions', { method: 'POST', body: JSON.stringify(payload) });
+  return res;
 };
 
-export const extendAssessmentSession = (assessmentId, extraMinutes) => {
-  const sessions = getAssessmentSessions();
-  const current = sessions[assessmentId];
-  if (!current) return null;
-  const base = current.endsAt ? new Date(current.endsAt) : new Date();
-  const updatedSession = { ...current, endsAt: new Date(base.getTime() + Number(extraMinutes || 0) * 60000).toISOString() };
-  const updated = { ...sessions, [assessmentId]: updatedSession };
-  setAssessmentSessions(updated);
-  return updatedSession;
+export const extendAssessmentSession = async (sessionId, extraMinutes) => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const res = await apiRequest(`/assessment-sessions/${encodeURIComponent(sessionId)}`, { method: 'PUT', body: JSON.stringify({ /* caller should supply fields */ }) });
+  return res;
 };
 
-export const stopAssessmentSession = (assessmentId) => {
-  const sessions = getAssessmentSessions();
-  const current = sessions[assessmentId];
-  if (!current) return null;
-  const updatedSession = { ...current, isLive: false, endedAt: new Date().toISOString() };
-  const updated = { ...sessions, [assessmentId]: updatedSession };
-  setAssessmentSessions(updated);
-  return updatedSession;
+export const stopAssessmentSession = async (sessionId) => {
+  if (!getAuthToken()) throw new Error('Authentication required');
+  const res = await apiRequest(`/assessment-sessions/${encodeURIComponent(sessionId)}`, { method: 'PUT', body: JSON.stringify({ is_live: false }) });
+  return res;
 };
 
 export const isAssessmentSessionLive = (assessmentId) => {
-  const session = getAssessmentSession(assessmentId);
-  if (!session || !session.isLive) return false;
-  if (session.endsAt && new Date(session.endsAt) <= new Date()) return false;
-  return true;
+  const session = getCachedAssessmentSession(assessmentId);
+  if (!session || !session.is_live && !session.isLive) return false;
+  const endsAt = session.ends_at || session.endsAt;
+  if (endsAt && new Date(endsAt) <= new Date()) return false;
+  return session.is_live === 1 || session.is_live === true || session.isLive === true;
 };
 
 // ===== PER-STUDENT RANDOMIZED QUESTION SELECTION =====
@@ -1006,29 +695,30 @@ export const clearQuestionSelectionFor = (assessmentId, studentId) => {
 };
 
 // Student Progress
-export const getStudentProgress = (studentId) => {
-  const progress = getItem(STORAGE_KEYS.STUDENT_PROGRESS, {});
-  return progress[studentId] || {
-    learning: { completed: 0, total: 0 },
-    practice: { completed: 0, total: 0 },
-    assessments: { completed: 0, total: 0 },
-    xp: 0,
-    securityScore: 0,
-    streak: 0,
-    lastActive: null
-  };
+export const getStudentProgress = async (studentId) => {
+  if (!getAuthToken()) throw new Error('Authentication required to retrieve student progress');
+  try {
+    const res = await apiRequest(`/student-progress/${encodeURIComponent(studentId)}`);
+    if (!res || Object.keys(res).length === 0) return null;
+    return res;
+  } catch (error) {
+    throw new Error('Failed to fetch student progress: ' + error.message);
+  }
 };
-export const setStudentProgress = (studentId, progress) => {
-  const allProgress = getItem(STORAGE_KEYS.STUDENT_PROGRESS, {});
-  setItem(STORAGE_KEYS.STUDENT_PROGRESS, {
-    ...allProgress,
-    [studentId]: progress
-  });
+export const setStudentProgress = async (studentId, progress) => {
+  if (!getAuthToken()) throw new Error('Authentication required to save student progress');
+  try {
+    const payload = { student_id: studentId, ...progress };
+    const res = await apiRequest('/student-progress', { method: 'POST', body: JSON.stringify(payload) });
+    return res;
+  } catch (error) {
+    throw new Error('Failed to save student progress: ' + error.message);
+  }
 };
-export const updateStudentProgress = (studentId, updates) => {
-  const currentProgress = getStudentProgress(studentId);
+export const updateStudentProgress = async (studentId, updates) => {
+  const currentProgress = await getStudentProgress(studentId);
   const updatedProgress = { ...currentProgress, ...updates };
-  setStudentProgress(studentId, updatedProgress);
+  await setStudentProgress(studentId, updatedProgress);
   return updatedProgress;
 };
 
@@ -1041,42 +731,65 @@ export const updateStudentProgress = (studentId, updates) => {
  * @param {string} options.description - Backup description
  * @returns {object} - Backup object
  */
-export const createBackup = (options = {}) => {
-  const backup = {
-    version: APP_VERSION,
-    timestamp: new Date().toISOString(),
-    data: {
-      users: getUsers(),
-      courses: getCourses(),
-      labs: getLabs(),
-      assessments: getAssessments(),
-      results: getResults(),
-      attendance: getAttendance(),
-      schedules: getSchedules(),
-      violations: getViolations(),
-      notifications: getNotifications(),
-      auditLogs: getAuditLogs(),
-      restrictions: getRestrictions(),
-      faculty: getFaculty(),
-      studentGroups: getStudentGroups(),
-      settings: getSettings(),
-      permissions: getPermissions(),
-      assessmentUnlocks: getAssessmentUnlocks(),
-      studentProgress: getItem(STORAGE_KEYS.STUDENT_PROGRESS, {}),
-    },
-    ...options
-  };
+export const createBackup = async (options = {}) => {
+  if (!getAuthToken()) throw new Error('Authentication required to create backup');
+  try {
+    const auditLogs = await getAuditLogs();
+    const users = await getUsers();
+    const courses = await getCourses();
+    const labs = await getLabs();
+    const assessments = await getAssessments();
+    const results = await getResults();
+    const attendance = await getAttendance();
+    const schedules = await getSchedules();
+    const violations = await getViolations();
+    const notifications = await getNotifications();
+    const restrictions = getRestrictions();
+    const faculty = getFaculty();
+    const studentGroups = getStudentGroups();
+    const settings = getSettings();
+    const permissions = getPermissions();
+    const assessmentUnlocks = await getAssessmentUnlocks();
+    const studentProgress = getItem(STORAGE_KEYS.STUDENT_PROGRESS, {});
 
-  // Add metadata
-  backup.id = `BACKUP-${Date.now()}`;
-  backup.fileName = `cybernex-backup-${APP_VERSION}-${backup.timestamp.replace(/[:.]/g, '-')}.json`;
-  backup.size = JSON.stringify(backup.data).length;
-  backup.fileCount = Object.values(backup.data).reduce(
-    (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 1),
-    0
-  );
+    const backup = {
+      version: APP_VERSION,
+      timestamp: new Date().toISOString(),
+      data: {
+        users,
+        courses,
+        labs,
+        assessments,
+        results,
+        attendance,
+        schedules,
+        violations,
+        notifications,
+        auditLogs,
+        restrictions,
+        faculty,
+        studentGroups,
+        settings,
+        permissions,
+        assessmentUnlocks,
+        studentProgress
+      },
+      createdBy: options.createdBy || 'system',
+      description: options.description || ''
+    };
 
-  // Save to storage
+    backup.id = `backup-${Date.now()}`;
+    backup.fileName = `cybernex-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+
+    // Save to backups list (cache only)
+    const backups = getBackups();
+    const newBackup = { id: backup.id, timestamp: backup.timestamp, fileName: backup.fileName, createdBy: backup.createdBy, description: backup.description };
+    setBackups([newBackup, ...backups]);
+
+    return backup;
+  } catch (error) {
+    throw new Error('Failed to create backup: ' + error.message);
+  }
   addBackup(backup);
 
   return backup;
@@ -1106,12 +819,12 @@ export const downloadBackup = (backup) => {
  * @param {boolean} verifyVersion - Whether to verify app version
  * @returns {object} - Result object with success status
  */
-export const restoreBackup = (backup, verifyVersion = true) => {
+ export const restoreBackup = async (backup, verifyVersion = true) => {
   // Verify backup structure
   if (!backup || !backup.data || !backup.version) {
     return {
       success: false,
-      error: 'Invalid backup file structure'
+      error: 'Invalid backup file structure',
     };
   }
 
@@ -1119,59 +832,26 @@ export const restoreBackup = (backup, verifyVersion = true) => {
   if (verifyVersion && backup.version !== APP_VERSION) {
     return {
       success: false,
-      error: `Backup version ${backup.version} does not match current app version ${APP_VERSION}`
+      error: `Backup version ${backup.version} does not match current app version ${APP_VERSION}`,
     };
   }
 
   try {
-    // Clear existing data
-    clearAll();
-
-    // Restore each data type
-    setUsers(backup.data.users || []);
-    setCourses(backup.data.courses || []);
-    setLabs(backup.data.labs || []);
-    setAssessments(backup.data.assessments || []);
-    setResults(backup.data.results || []);
-    setAttendance(backup.data.attendance || []);
-    setSchedules(backup.data.schedules || []);
-    setViolations(backup.data.violations || []);
-    setNotifications(backup.data.notifications || []);
-    setAuditLogs(backup.data.auditLogs || []);
-    setRestrictions(backup.data.restrictions || []);
-    setFaculty(backup.data.faculty || []);
-    setStudentGroups(backup.data.studentGroups || []);
-    setSettings(backup.data.settings || {});
-    setPermissions(backup.data.permissions || {});
-    setAssessmentUnlocks(backup.data.assessmentUnlocks || {});
-    setItem(STORAGE_KEYS.STUDENT_PROGRESS, backup.data.studentProgress || {});
-
-    // Set app version
-    setItem(STORAGE_KEYS.APP_VERSION, APP_VERSION);
-
-    // Add restore to audit log
-    addAuditLog({
-      id: `AUDIT-${Date.now()}`,
-      userId: backup.createdBy || 'system',
-      role: ROLES.ADMIN,
-      action: 'BACKUP_RESTORED',
-      target: 'System',
-      targetId: backup.id,
-      status: 'Success',
-      ipAddress: 'localhost',
-      userAgent: navigator.userAgent,
-      timestamp: new Date().toISOString()
-    });
+    // Restore must be performed by the backend.
+    // Do not write authoritative domain data directly to localStorage.
+    const result = await persistToBackend('/backups/restore', 'POST', backup);
 
     return {
       success: true,
-      message: 'Backup restored successfully'
+      message: 'Backup restored successfully',
+      result,
     };
   } catch (error) {
     console.error('Error restoring backup:', error);
+
     return {
       success: false,
-      error: 'Failed to restore backup: ' + error.message
+      error: 'Failed to restore backup: ' + error.message,
     };
   }
 };
@@ -1230,8 +910,12 @@ export const logAction = (action) => {
     timestamp: new Date().toISOString()
   };
 
-  addAuditLog(log);
+  _callAddAuditLog(log);
   return log;
+};
+// Note: `addAuditLog` is async; ensure rejections are logged but do not fallback to localStorage
+const _callAddAuditLog = (log) => {
+  addAuditLog(log).catch(err => console.error('Failed to persist audit log:', err.message));
 };
 
 // ===== EXPORT =====
@@ -1378,7 +1062,7 @@ export default {
 
   // Assessment Live Sessions
   getAssessmentSessions,
-  getAssessmentSession,
+  getCachedAssessmentSession,
   startAssessmentSession,
   extendAssessmentSession,
   stopAssessmentSession,

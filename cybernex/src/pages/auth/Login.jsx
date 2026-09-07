@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNotifications } from '../../contexts/NotificationContext';
-import { ROLES, DEMO_CREDENTIALS } from '../../utils/constants';
 import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import { ROLES } from '../../utils/constants';
 import { Eye, EyeOff, User, Lock, ShieldCheck, Radio, CheckCircle2 } from 'lucide-react';
 
 const Login = () => {
@@ -61,20 +61,6 @@ const Login = () => {
     }
   };
 
-  const handleDemoLogin = async (role) => {
-    setIsLoading(true);
-    try {
-      const creds = DEMO_CREDENTIALS[role];
-      if (creds) {
-        await login(creds.email, creds.password);
-      }
-    } catch (err) {
-      showError('Demo login failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#07111f] p-4 text-slate-100 md:p-8">
       <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl overflow-hidden border border-slate-700/80 bg-[#0b1728] shadow-2xl md:grid-cols-[1.1fr_.9fr] md:min-h-[680px]">
@@ -109,7 +95,7 @@ const Login = () => {
                 Email Address
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 " />
                 <input
                   type="email"
                   id="email"
@@ -166,48 +152,6 @@ const Login = () => {
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-
-          {/* Divider */}
-          <div className="my-6">
-            <div className="flex items-center gap-4">
-              <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
-              <span className="text-sm text-gray-400 dark:text-gray-500">
-                or continue with
-              </span>
-              <div className="flex-1 h-px bg-gray-300 dark:bg-gray-600" />
-            </div>
-          </div>
-
-          {/* Demo Login Buttons */}
-          <div className="grid grid-cols-3 gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => handleDemoLogin(ROLES.ADMIN)}
-              disabled={isLoading}
-            >
-              <span className="text-sm">Admin</span>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => handleDemoLogin(ROLES.FACULTY)}
-              disabled={isLoading}
-            >
-              <span className="text-sm">Faculty</span>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => handleDemoLogin(ROLES.STUDENT)}
-              disabled={isLoading}
-            >
-              <span className="text-sm">Student</span>
-            </Button>
-          </div>
 
           {/* Footer */}
           <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-6">

@@ -30,6 +30,24 @@ const Levels = () => {
     totalCourses: 0
   });
 
+  const getLevelDescription = (levelId) => {
+    const descriptions = {
+      1: 'Foundational cybersecurity concepts and basics',
+      2: 'Core security fundamentals and principles',
+      3: 'Web application security and vulnerabilities',
+      4: 'Network security protocols and defense mechanisms',
+      5: 'Linux system administration and security',
+      6: 'Windows system administration and security',
+      7: 'Active Directory configuration and management',
+      8: 'Penetration testing methodologies and tools',
+      9: 'Security Operations Center monitoring and analysis',
+      10: 'Digital forensics investigation and analysis',
+      11: 'Cloud computing and DevSecOps security',
+      12: 'AI engineering and AI security specialization'
+    };
+    return descriptions[levelId] || 'Specialized cybersecurity level';
+  };
+
   // Convert LEVELS object to array for easier manipulation
   const levelsArray = Object.entries(LEVELS).map(([id, name]) => ({
     id: parseInt(id),
@@ -128,24 +146,6 @@ const Levels = () => {
     
     setFilteredLevels(filtered);
   }, [searchQuery, filterStatus, courses, allUsers]);
-
-  const getLevelDescription = (levelId) => {
-    const descriptions = {
-      1: 'Foundational cybersecurity concepts and basics',
-      2: 'Core security fundamentals and principles',
-      3: 'Web application security and vulnerabilities',
-      4: 'Network security protocols and defense mechanisms',
-      5: 'Linux system administration and security',
-      6: 'Windows system administration and security',
-      7: 'Active Directory configuration and management',
-      8: 'Penetration testing methodologies and tools',
-      9: 'Security Operations Center monitoring and analysis',
-      10: 'Digital forensics investigation and analysis',
-      11: 'Cloud computing and DevSecOps security',
-      12: 'AI engineering and AI security specialization'
-    };
-    return descriptions[levelId] || 'Specialized cybersecurity level';
-  };
 
   const handleDelete = (level) => {
     setSelectedLevel(level);

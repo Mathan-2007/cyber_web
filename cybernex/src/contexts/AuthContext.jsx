@@ -1,10 +1,58 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ROLES, DEMO_CREDENTIALS, STORAGE_KEYS } from '../utils/constants';
-import { getItem, setItem, removeItem, logAction, initializeMockData } from '../services/storageService';
+import { ROLES, STORAGE_KEYS } from '../utils/constants';
+import { getItem, setItem, removeItem, logAction } from '../services/storageService';
 import { apiRequest, setAuthToken, clearAuthToken } from '../services/api';
 import { ADMIN_DEFAULT_PERMISSIONS, FACULTY_DEFAULT_PERMISSIONS, STUDENT_DEFAULT_PERMISSIONS } from '../permissions/rolePermissions';
 import { getAllPermissionsForUser } from '../permissions/rolePermissions';
+
+const DEFAULT_ROLE_RESOURCES = {
+  admin: [
+    '/dashboard', '/notifications', '/search',
+    '/admin/dashboard', '/admin/users', '/admin/courses', '/admin/assessments', '/admin/results',
+    '/admin/restrictions', '/admin/student-level-control', '/admin/violations', '/admin/backups', '/admin/audit-logs'
+  ],
+  faculty: [
+    '/dashboard', '/notifications', '/search',
+    '/faculty/dashboard', '/faculty/students', '/faculty/courses', '/faculty/assessments', '/faculty/results',
+    '/faculty/attendance', '/faculty/schedule', '/faculty/violations'
+  ],
+  student: [
+    '/dashboard', '/notifications', '/search',
+    '/student/dashboard', '/student/learning', '/student/roadmap', '/student/practice', '/student/assessments',
+    '/student/progress', '/student/results', '/student/attendance', '/student/schedule'
+  ]
+};
+
+const getResourcesForRole = (role) => DEFAULT_ROLE_RESOURCES[role] || DEFAULT_ROLE_RESOURCES.student;
+
+const normalizeResourcePath = (resource) => {
+  if (!resource) return null;
+  if (typeof resource === 'string') return resource;
+  if (typeof resource === 'object') return resource.path || resource.name || resource.element || null;
+  return null;
+};
+
+const normalizeResourceList = (resources = []) => {
+  if (!Array.isArray(resources)) return [];
+  return resources
+    .map((resource) => normalizeResourcePath(resource))
+    .filter(Boolean);
+};
+
+const resolveUserResources = (user) => {
+  if (!user) return [];
+  const baseResources = getResourcesForRole(user.role || 'student');
+  const customResources = Array.isArray(user.resources) ? user.resources : [];
+  const mergedPaths = [...baseResources, ...normalizeResourceList(customResources)];
+  return [...new Set(mergedPaths)];
+};
+
+const getDefaultDashboardRoute = (resources = []) => {
+  const preferred = ['/admin/dashboard', '/faculty/dashboard', '/student/dashboard', '/dashboard'];
+  const resourcePaths = normalizeResourceList(resources);
+  return preferred.find((resource) => resourcePaths.includes(resource)) || '/dashboard';
+};
 
 // ===== CREATE CONTEXT =====
 const AuthContext = createContext(null);
@@ -20,19 +68,23 @@ const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        initializeMockData();
-      } catch (err) {
-        console.warn('Failed to initialize mock data:', err);
-      }
-
-      try {
-        const storedUser = getItem(STORAGE_KEYS.USER);
-        const token = localStorage.getItem('cybernex_token');
+        const token = localStorage.getItem('cybernex_token') || document.cookie
+          .split('; ')
+          .find((entry) => entry.startsWith('cybernex_token='))
+          ?.split('=')[1];
 
         if (token) {
           try {
             const response = await apiRequest('/auth/me');
-            const hydratedUser = { ...response.user, sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() };
+            const hydratedUser = {
+              ...response.user,
+              user_id: response.user_id || response.user?.user_id || response.user?.id,
+              user_name: response.user_name || response.user?.user_name || response.user?.name,
+              department: response.department || response.user?.department || 'Computer Science and Engineering',
+              resources: response.resources || resolveUserResources(response.user),
+              permissions: response.permissions || normalizeResourceList(response.resources || []),
+              sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+            };
             setUser(hydratedUser);
             setIsAuthenticated(true);
             setItem(STORAGE_KEYS.USER, hydratedUser);
@@ -40,15 +92,13 @@ const AuthProvider = ({ children }) => {
           } catch (error) {
             console.warn('Stored backend session invalid, clearing token:', error.message);
             clearAuthToken();
+            removeItem(STORAGE_KEYS.USER);
           }
         }
 
-        if (storedUser?.sessionExpiresAt && new Date(storedUser.sessionExpiresAt) <= new Date()) {
-          removeItem(STORAGE_KEYS.USER);
-        } else if (storedUser) {
-          setUser(storedUser);
-          setIsAuthenticated(true);
-        }
+        setUser(null);
+        setIsAuthenticated(false);
+        removeItem(STORAGE_KEYS.USER);
       } catch (error) {
         console.error('Error initializing auth:', error);
       } finally {
@@ -86,131 +136,73 @@ const AuthProvider = ({ children }) => {
     setIsLoading(true);
 
     try {
-      try {
-        const response = await apiRequest('/auth/login', {
-          method: 'POST',
-          body: JSON.stringify({ email, password })
-        });
+      // Clear any stale session before attempting a fresh login.
+      clearAuthToken();
+      removeItem(STORAGE_KEYS.USER);
+      setUser(null);
+      setIsAuthenticated(false);
 
-        const userToSet = {
-          ...response.user,
-          token: response.token,
-          sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-          permissions: response.user.permissions ||
-            (response.user.role === ROLES.ADMIN ? ADMIN_DEFAULT_PERMISSIONS :
-             response.user.role === ROLES.FACULTY ? FACULTY_DEFAULT_PERMISSIONS :
-             STUDENT_DEFAULT_PERMISSIONS)
-        };
+      const response = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
 
-        setUser(userToSet);
-        setIsAuthenticated(true);
+      const userToSet = {
+        ...response.user,
+        user_id: response.user_id || response.user?.user_id || response.user?.id,
+        user_name: response.user_name || response.user?.user_name || response.user?.name,
+        department: response.department || response.user?.department || 'Computer Science and Engineering',
+        token: response.token,
+        resources: response.resources || resolveUserResources(response.user),
+        permissions: response.permissions || normalizeResourceList(response.resources || []),
+        sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+      };
 
-        const redirectPath = userToSet.role === ROLES.ADMIN ? '/admin/dashboard' :
-                             userToSet.role === ROLES.FACULTY ? '/faculty/dashboard' :
-                             '/student/dashboard';
+      setAuthToken(response.token);
+      setUser(userToSet);
+      setIsAuthenticated(true);
 
-        navigate(redirectPath);
-        setIsLoading(false);
-        return { success: true, user: userToSet };
-      } catch (backendError) {
-        console.warn('Backend auth failed, falling back to local demo login:', backendError.message);
-      }
-
-      const demoUser = Object.entries(DEMO_CREDENTIALS).find(([role, creds]) =>
-        creds.email === email && creds.password === password
-      );
-
-      if (demoUser) {
-        const [role, creds] = demoUser;
-        const userData = getItem(STORAGE_KEYS.USERS, []).find(u => u.email === email) ||
-          getItem(STORAGE_KEYS.USERS, []).find(u => u.role === role);
-
-        if (userData) {
-          const userToSet = {
-            ...userData,
-            email: creds.email,
-            password: creds.password,
-            sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-            permissions: userData.permissions ||
-              (role === ROLES.ADMIN ? ADMIN_DEFAULT_PERMISSIONS :
-               role === ROLES.FACULTY ? FACULTY_DEFAULT_PERMISSIONS :
-               STUDENT_DEFAULT_PERMISSIONS)
-          };
-
-          setUser(userToSet);
-          setIsAuthenticated(true);
-
-          const redirectPath = userToSet.role === ROLES.ADMIN ? '/admin/dashboard' :
-                               userToSet.role === ROLES.FACULTY ? '/faculty/dashboard' :
-                               '/student/dashboard';
-
-          navigate(redirectPath);
-          setIsLoading(false);
-          return { success: true, user: userToSet };
-        }
-      }
-
-      const users = getItem(STORAGE_KEYS.USERS, []);
-      const user = users.find(u => u.email === email);
-
-      if (user && user.password === password) {
-        const securedUser = { ...user, sessionExpiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString() };
-        setUser(securedUser);
-        setIsAuthenticated(true);
-
-        const redirectPath = securedUser.role === ROLES.ADMIN ? '/admin/dashboard' :
-                             securedUser.role === ROLES.FACULTY ? '/faculty/dashboard' :
-                             '/student/dashboard';
-
-        navigate(redirectPath);
-        setIsLoading(false);
-        return { success: true, user: securedUser };
-      }
-
+      const redirectPath = getDefaultDashboardRoute(userToSet.resources);
+      navigate(redirectPath);
       setIsLoading(false);
-      return { success: false, error: 'Invalid email or password' };
+      return { success: true, user: userToSet };
     } catch (error) {
       console.error('Login error:', error);
       setIsLoading(false);
-      return { success: false, error: 'Login failed. Please try again.' };
+      return { success: false, error: error.message || 'Invalid email or password' };
     }
   }, [navigate]);
 
   // ===== LOGOUT FUNCTION =====
   const logout = useCallback(() => {
     try {
-      if (user) {
+      const currentUser = user || getItem(STORAGE_KEYS.USER);
+
+      if (currentUser) {
         logAction({
           action: 'LOGOUT',
-          userId: user.id,
-          role: user.role,
+          userId: currentUser.id,
+          role: currentUser.role,
           target: 'System',
           status: 'Success'
         });
       }
 
-      setUser(null);
-      setIsAuthenticated(false);
+      // Always clear auth state, even if the token exists without a populated user object.
+      localStorage.removeItem('cybernex_token');
+      document.cookie = 'cybernex_token=; path=/; max-age=0; samesite=lax';
       removeItem(STORAGE_KEYS.USER);
       clearAuthToken();
-      navigate('/login');
+      setUser(null);
+      setIsAuthenticated(false);
+      navigate('/login', { replace: true });
     } catch (error) {
       console.error('Logout error:', error);
+      localStorage.removeItem('cybernex_token');
+      document.cookie = 'cybernex_token=; path=/; max-age=0; samesite=lax';
+      navigate('/login', { replace: true });
     }
   }, [user, navigate]);
-
-  // ===== DEMO LOGIN FUNCTIONS =====
-  const demoLogin = useCallback((role) => {
-    const creds = DEMO_CREDENTIALS[role];
-    if (creds) {
-      return login(creds.email, creds.password);
-    }
-    return { success: false, error: 'Invalid demo role' };
-  }, [login]);
-
-  const loginAsAdmin = useCallback(() => demoLogin(ROLES.ADMIN), [demoLogin]);
-  const loginAsFaculty = useCallback(() => demoLogin(ROLES.FACULTY), [demoLogin]);
-  const loginAsStudent = useCallback(() => demoLogin(ROLES.STUDENT), [demoLogin]);
 
   const updateSessionUser = useCallback((updates) => {
     setUser(current => current ? { ...current, ...updates } : current);
@@ -275,10 +267,6 @@ const AuthProvider = ({ children }) => {
     // Authentication functions
     login,
     logout,
-    demoLogin,
-    loginAsAdmin,
-    loginAsFaculty,
-    loginAsStudent,
     updateSessionUser,
 
     // Permission functions

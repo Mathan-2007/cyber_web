@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { ROLES, PERMISSIONS } from '../../utils/constants';
+import { apiRequest } from '../../services/api';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
@@ -20,9 +21,16 @@ const AccessControl = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [draftPermissions, setDraftPermissions] = useState([]);
+  const [resourceDraft, setResourceDraft] = useState('');
 
   useEffect(() => {
-    setDraftPermissions(permissions[selectedRole] || roleDefaultPermissions[selectedRole] || []);
+    const basePermissions = permissions?.[selectedRole] || roleDefaultPermissions[selectedRole] || [];
+    const roleResources = Array.isArray(permissions)
+      ? permissions.filter((resource) => resource?.role === selectedRole).map((resource) => resource.path || resource.name || resource.element || '')
+      : [];
+
+    setDraftPermissions(basePermissions);
+    setResourceDraft((roleResources.length ? roleResources : defaultRoleResourcePaths[selectedRole]).join('\n'));
     setSuccess(false);
   }, [selectedRole, permissions]);
 
@@ -127,6 +135,12 @@ const AccessControl = () => {
     [ROLES.ADMIN]: Object.values(PERMISSIONS)
   };
 
+  const defaultRoleResourcePaths = {
+    [ROLES.STUDENT]: ['/dashboard', '/notifications', '/search', '/student/dashboard', '/student/learning', '/student/roadmap', '/student/practice', '/student/assessments', '/student/progress', '/student/results', '/student/attendance', '/student/schedule'],
+    [ROLES.FACULTY]: ['/dashboard', '/notifications', '/search', '/faculty/dashboard', '/faculty/students', '/faculty/courses', '/faculty/practice', '/faculty/assessments', '/faculty/results', '/faculty/attendance', '/faculty/schedule', '/faculty/violations'],
+    [ROLES.ADMIN]: ['/dashboard', '/notifications', '/search', '/admin/dashboard', '/admin/users', '/admin/courses', '/admin/assessments', '/admin/results', '/admin/attendance', '/admin/schedule', '/admin/faculty', '/admin/violations', '/admin/backups', '/admin/access-control', '/admin/audit-logs']
+  };
+
   // Get current permissions for the selected role
   const currentPermissions = draftPermissions;
 
@@ -144,7 +158,28 @@ const AccessControl = () => {
     setIsSaving(true);
     setError(null);
     try {
-      await updatePermissions(selectedRole, draftPermissions);
+      const resources = resourceDraft
+        .split(/\n|,/) 
+        .map((path) => path.trim())
+        .filter(Boolean)
+        .map((path, index) => ({
+          path,
+          name: path.replace(/^\//, '').split('/').filter(Boolean).pop() || path,
+          icon: 'LayoutDashboard',
+          menu: true,
+          element: path,
+          activity: 0,
+          sort_order: index + 1
+        }));
+
+      await Promise.all([
+        updatePermissions(selectedRole, draftPermissions),
+        apiRequest(`/role-resources/${encodeURIComponent(selectedRole)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ resources })
+        })
+      ]);
+
       setSuccess(true);
     } catch (saveError) {
       setError(saveError.message || 'Could not save role permissions.');
@@ -325,6 +360,21 @@ const AccessControl = () => {
           </Card>
         </div>
       </div>
+
+      <Card>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Role Resources for {selectedRole.replace('_', ' ')}
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+          One route per line. These paths are the authoritative navigation list for this role.
+        </p>
+        <textarea
+          value={resourceDraft}
+          onChange={(event) => setResourceDraft(event.target.value)}
+          className="w-full min-h-[140px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 text-sm text-gray-700 dark:text-gray-200"
+          placeholder="/student/dashboard\n/student/learning\n/student/progress"
+        />
+      </Card>
 
       {/* Permission Matrix */}
       <Card>

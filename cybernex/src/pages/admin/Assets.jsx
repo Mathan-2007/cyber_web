@@ -32,103 +32,14 @@ const Assets = () => {
     totalSize: 0
   });
 
-  // Mock data for assets - in a real app this would come from context/data
-  const mockAssets = [
-    {
-      id: 'ASSET-001',
-      name: 'Cybersecurity Fundamentals PDF',
-      type: 'document',
-      category: 'course_material',
-      extension: 'pdf',
-      size: 2.5,
-      uploadedBy: 'admin',
-      uploadedAt: new Date('2024-01-15T10:30:00').toISOString(),
-      lastModified: new Date('2024-01-15T10:30:00').toISOString(),
-      downloads: 125,
-      isActive: true,
-      description: 'Comprehensive guide to cybersecurity fundamentals'
-    },
-    {
-      id: 'ASSET-002',
-      name: 'Network Security Diagram',
-      type: 'image',
-      category: 'diagram',
-      extension: 'png',
-      size: 1.2,
-      uploadedBy: 'faculty-001',
-      uploadedAt: new Date('2024-02-20T14:45:00').toISOString(),
-      lastModified: new Date('2024-03-10T09:15:00').toISOString(),
-      downloads: 89,
-      isActive: true,
-      description: 'Network security architecture diagram'
-    },
-    {
-      id: 'ASSET-003',
-      name: 'Linux Security Lab',
-      type: 'lab',
-      category: 'practice',
-      extension: 'zip',
-      size: 15.8,
-      uploadedBy: 'faculty-002',
-      uploadedAt: new Date('2024-03-05T16:20:00').toISOString(),
-      lastModified: new Date('2024-03-05T16:20:00').toISOString(),
-      downloads: 45,
-      isActive: true,
-      description: 'Linux security configuration lab environment'
-    },
-    {
-      id: 'ASSET-004',
-      name: 'Web Security Video Tutorial',
-      type: 'video',
-      category: 'tutorial',
-      extension: 'mp4',
-      size: 125.5,
-      uploadedBy: 'admin',
-      uploadedAt: new Date('2024-02-28T11:00:00').toISOString(),
-      lastModified: new Date('2024-03-12T13:45:00').toISOString(),
-      downloads: 203,
-      isActive: true,
-      description: 'Comprehensive web security tutorial video'
-    },
-    {
-      id: 'ASSET-005',
-      name: 'Password Policy Template',
-      type: 'document',
-      category: 'template',
-      extension: 'docx',
-      size: 0.8,
-      uploadedBy: 'faculty-001',
-      uploadedAt: new Date('2024-01-10T08:45:00').toISOString(),
-      lastModified: new Date('2024-01-20T10:20:00').toISOString(),
-      downloads: 67,
-      isActive: false,
-      description: 'Organization password policy template'
-    }
-  ];
-
   useEffect(() => {
-    if (mockAssets.length > 0) {
-      setFilteredAssets(mockAssets);
-      
-      const images = mockAssets.filter(a => a.type === 'image').length;
-      const documents = mockAssets.filter(a => a.type === 'document').length;
-      const videos = mockAssets.filter(a => a.type === 'video').length;
-      const labs = mockAssets.filter(a => a.type === 'lab').length;
-      const totalSize = mockAssets.reduce((sum, a) => sum + a.size, 0);
-      
-      setStats({
-        total: mockAssets.length,
-        images,
-        documents,
-        videos,
-        labs,
-        totalSize
-      });
-    }
+    // No local mock assets; expect backend or admin-provided asset index.
+    setFilteredAssets([]);
+    setStats({ total: 0, images: 0, documents: 0, videos: 0, labs: 0, totalSize: 0 });
   }, []);
 
   useEffect(() => {
-    let filtered = [...mockAssets];
+    let filtered = [];
     
     // Filter by search
     if (searchQuery) {

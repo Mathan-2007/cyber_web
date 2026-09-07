@@ -1,54 +1,112 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
-  getUsers, setUsers, addUser, updateUser, deleteUser,
-  getCourses, setCourses, addCourse, updateCourse, deleteCourse, getLessons,
-  getLabs, setLabs, addLab, updateLab, deleteLab,
-  getAssessments, setAssessments, addAssessment, updateAssessment, deleteAssessment,
-  getResults, setResults, addResult, updateResult, deleteResult,
-  getAttendance, setAttendance, addAttendance, updateAttendance, deleteAttendance,
-  getSchedules, setSchedules, addSchedule, updateSchedule, deleteSchedule,
-  getViolations, setViolations, addViolation, updateViolation, deleteViolation,
-  getNotifications, setNotifications, addNotification, updateNotification, deleteNotification,
-  getAuditLogs, setAuditLogs, addAuditLog,
-  getRestrictions, setRestrictions, addRestriction, updateRestriction, deleteRestriction,
-  getFaculty, setFaculty, addFaculty, updateFaculty, deleteFaculty,
-  getStudentGroups, setStudentGroups, addStudentGroup, updateStudentGroup, deleteStudentGroup,
-  getSettings, setSettings, updateSettings,
-  getTheme, setTheme,
+  getUsers,
+  setUsers, addUser, updateUser, deleteUser,
+  getCourses,
+  setCourses, addCourse, updateCourse, deleteCourse,
+  getLabs,
+  setLabs, addLab, updateLab, deleteLab,
+  getAssessments,
+  setAssessments, addAssessment, updateAssessment, deleteAssessment,
+  getResults,
+  setResults, addResult, updateResult, deleteResult,
+  getAttendance,
+  setAttendance, addAttendance, updateAttendance, deleteAttendance,
+  getSchedules,
+  setSchedules, addSchedule, updateSchedule, deleteSchedule,
+  getViolations,
+  setViolations, addViolation, updateViolation, deleteViolation,
+  getNotifications,
+  setNotifications, addNotification, updateNotification, deleteNotification,
+  getAuditLogs,
+  setAuditLogs, addAuditLog,
+  getRestrictions,
+  setRestrictions, addRestriction, updateRestriction, deleteRestriction,
+  getFaculty,
+  setFaculty, addFaculty, updateFaculty, deleteFaculty,
+  getStudentGroups,
+  setStudentGroups, addStudentGroup, updateStudentGroup, deleteStudentGroup,
+  getSettings, setSettings, updateSettings as persistSettings,
+  getTheme, setTheme as saveTheme,
   getPermissions, setPermissions, updateRolePermissions,
-  getAssessmentUnlocks, setAssessmentUnlocks, unlockAssessmentForStudent, lockAssessmentForStudent, isAssessmentUnlockedForStudent, getAssessmentAccessForStudent, recordAssessmentAttempt,
+  getAssessmentUnlocks, setAssessmentUnlocks, unlockAssessmentForStudent, lockAssessmentForStudent, isAssessmentUnlockedForStudent, getCachedAssessmentAccessForStudent, recordAssessmentAttempt,
   getGlobalAssessmentPolicy, setGlobalAssessmentPolicy,
   getAssessmentSessions, startAssessmentSession, extendAssessmentSession, stopAssessmentSession, isAssessmentSessionLive,
-  getStudentProgress, setStudentProgress, updateStudentProgress,
-  createBackup, downloadBackup, restoreBackup, importBackupFromFile,
-  getBackups, setBackups,
+  getStudentProgress as readStudentProgress, setStudentProgress, updateStudentProgress as saveStudentProgress,
+  createBackup as createBackupRecord, downloadBackup as downloadBackupFile, restoreBackup as restoreBackupData, importBackupFromFile as importBackupFile,
+  setBackups,
   logAction
 } from '../services/storageService';
 import { useAuth } from './AuthContext';
-import { apiRequest } from '../services/api';
+import { apiRequest, getAuthToken } from '../services/api';
+import { ADMIN_DEFAULT_PERMISSIONS, FACULTY_DEFAULT_PERMISSIONS, STUDENT_DEFAULT_PERMISSIONS } from '../permissions/rolePermissions';
 import { ROLES, ASSESSMENT_STATES } from '../utils/constants';
 
 // ===== CREATE CONTEXT =====
 const DataContext = createContext(null);
 
-const safeLoadFromApi = async (endpoint, fallback) => {
-  try {
-    const response = await apiRequest(endpoint);
-    if (response !== null && response !== undefined) {
-      return response;
-    }
-  } catch (error) {
-    console.warn(`API fallback for ${endpoint}:`, error.message);
+const safeLoadFromApi = async (endpoint) => {
+  const response = await apiRequest(endpoint);
+  return response !== null && response !== undefined ? response : [];
+};
+
+const getRelevantEndpointsForRoute = (pathname = '/', role = 'student') => {
+  const safePath = pathname || '/';
+  const lowerPath = safePath.toLowerCase();
+  if (lowerPath.startsWith('/admin')) {
+    // Only load the endpoints relevant to the specific admin sub-route.
+    // This avoids fetching many unrelated resources when opening a single admin page.
+    if (lowerPath.startsWith('/admin/violations')) return ['/violations'];
+    if (lowerPath.startsWith('/admin/audit-logs')) return ['/audit-logs'];
+    if (lowerPath.startsWith('/admin/courses')) return ['/courses'];
+    if (lowerPath.startsWith('/admin/assessments')) return ['/assessments'];
+    if (lowerPath.startsWith('/admin/users')) return ['/users'];
+    if (lowerPath.startsWith('/admin/notifications')) return ['/notifications'];
+    // Fallback for generic admin landing: load essential overview items only
+    return ['/users', '/courses', '/assessments', '/notifications'];
   }
 
-  return typeof fallback === 'function' ? fallback() : fallback;
+  if (lowerPath.startsWith('/faculty')) {
+    return [
+      '/faculty',
+      '/courses',
+      '/assessments',
+      '/results',
+      '/attendance',
+      '/schedules',
+      '/notifications'
+    ];
+  }
+
+  if (lowerPath.startsWith('/student')) {
+    return [
+      '/courses',
+      '/labs',
+      '/assessments',
+      '/results',
+      '/attendance',
+      '/notifications',
+      '/schedules'
+    ];
+  }
+
+  if (lowerPath.startsWith('/notifications') || lowerPath.startsWith('/search')) {
+    return ['/notifications', '/users'];
+  }
+
+  return ['/notifications'];
 };
 
 // ===== PROVIDER COMPONENT =====
 const DataProvider = ({ children }) => {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const isPublicRoute = ['/login', '/access-denied', '/all-pages'].includes(location.pathname);
+  const isSessionReady = !!user && !!getAuthToken() && !authLoading && isAuthenticated;
 
   // ===== USERS STATE =====
   const [users, setUsersState] = useState([]);
@@ -132,7 +190,7 @@ const DataProvider = ({ children }) => {
   const [assessmentUnlocks, setAssessmentUnlocksState] = useState({});
   const [assessmentUnlocksLoading, setAssessmentUnlocksLoading] = useState(false);
   const [globalAssessmentPolicy, setGlobalAssessmentPolicyState] = useState(() => getGlobalAssessmentPolicy());
-  const [assessmentSessions, setAssessmentSessionsState] = useState(() => getAssessmentSessions());
+  const [assessmentSessions, setAssessmentSessionsState] = useState({});
 
   // ===== INITIAL DATA LOAD =====
   useEffect(() => {
@@ -140,51 +198,40 @@ const DataProvider = ({ children }) => {
       try {
         setIsLoading(true);
 
-        // Load all data in parallel
-        const [
-          usersData, coursesData, labsData, assessmentsData,
-          resultsData, attendanceData, schedulesData, violationsData,
-          notificationsData, auditLogsData, restrictionsData,
-          facultyData, studentGroupsData, settingsData,
-          themeData, permissionsData, unlocksData
-        ] = await Promise.all([
-          safeLoadFromApi('/users', getUsers),
-          safeLoadFromApi('/courses', getCourses),
-          safeLoadFromApi('/labs', getLabs),
-          safeLoadFromApi('/assessments', getAssessments),
-          safeLoadFromApi('/results', getResults),
-          safeLoadFromApi('/attendance', getAttendance),
-          safeLoadFromApi('/schedules', getSchedules),
-          safeLoadFromApi('/violations', getViolations),
-          safeLoadFromApi('/notifications', getNotifications),
-          safeLoadFromApi('/audit-logs', getAuditLogs),
-          safeLoadFromApi('/restrictions', getRestrictions),
-          safeLoadFromApi('/faculty', getFaculty),
-          safeLoadFromApi('/student-groups', getStudentGroups),
-          safeLoadFromApi('/settings', getSettings),
-          getTheme(),
-          getPermissions(),
-          getAssessmentUnlocks()
-        ]);
+        const endpoints = [...new Set(getRelevantEndpointsForRoute(location.pathname, user?.role))];
 
-        // Set all state
-        setUsersState(usersData);
-        setCoursesState(coursesData);
-        setLabsState(labsData);
-        setAssessmentsState(assessmentsData);
-        setResultsState(resultsData);
-        setAttendanceState(attendanceData);
-        setSchedulesState(schedulesData);
-        setViolationsState(violationsData);
-        setNotificationsState(notificationsData);
-        setAuditLogsState(auditLogsData);
-        setRestrictionsState(restrictionsData);
-        setFacultyState(facultyData);
-        setStudentGroupsState(studentGroupsData);
-        setSettingsState(settingsData);
-        setThemeState(themeData);
-        setPermissionsState(permissionsData);
-        setAssessmentUnlocksState(unlocksData);
+        const results = await Promise.all(
+          endpoints.map(async (endpoint) => {
+            const data = await safeLoadFromApi(endpoint);
+            return [endpoint, data];
+          })
+        );
+
+        const reducer = Object.fromEntries(results);
+        try {
+          const sessions = await getAssessmentSessions();
+          setAssessmentSessionsState(sessions);
+        } catch (err) {
+          console.error('Failed to load assessment sessions during initial load:', err);
+        }
+
+        setUsersState(reducer['/users'] || []);
+        setCoursesState(reducer['/courses'] || []);
+        setLabsState(reducer['/labs'] || []);
+        setAssessmentsState(reducer['/assessments'] || []);
+        setResultsState(reducer['/results'] || []);
+        setAttendanceState(reducer['/attendance'] || []);
+        setSchedulesState(reducer['/schedules'] || []);
+        setViolationsState(reducer['/violations'] || []);
+        setNotificationsState(reducer['/notifications'] || []);
+        setAuditLogsState(reducer['/audit-logs'] || []);
+        setRestrictionsState(reducer['/restrictions'] || []);
+        setFacultyState(reducer['/faculty'] || []);
+        setStudentGroupsState(reducer['/student-groups'] || []);
+        setSettingsState(reducer['/settings'] || {});
+        setThemeState('system');
+        setPermissionsState({});
+        setAssessmentUnlocksState({});
 
         setError(null);
       } catch (err) {
@@ -195,15 +242,22 @@ const DataProvider = ({ children }) => {
       }
     };
 
+    if (authLoading) return;
+    if (isPublicRoute || !isSessionReady) {
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
     loadInitialData();
-  }, []);
+  }, [authLoading, isAuthenticated, user, location.pathname, isPublicRoute, isSessionReady]);
 
   // ===== DATA FETCHING FUNCTIONS =====
   // Users
   const refreshUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
-      const data = await safeLoadFromApi('/users', getUsers);
+      const data = await safeLoadFromApi('/users');
       setUsersState(data);
       setUsersError(null);
     } catch (err) {
@@ -218,7 +272,7 @@ const DataProvider = ({ children }) => {
   const refreshCourses = useCallback(async () => {
     setCoursesLoading(true);
     try {
-      const data = await safeLoadFromApi('/courses', getCourses);
+      const data = await safeLoadFromApi('/courses');
       setCoursesState(data);
       setCoursesError(null);
     } catch (err) {
@@ -233,7 +287,7 @@ const DataProvider = ({ children }) => {
   const refreshLabs = useCallback(async () => {
     setLabsLoading(true);
     try {
-      const data = await safeLoadFromApi('/labs', getLabs);
+      const data = await safeLoadFromApi('/labs');
       setLabsState(data);
       setLabsError(null);
     } catch (err) {
@@ -248,7 +302,7 @@ const DataProvider = ({ children }) => {
   const refreshAssessments = useCallback(async () => {
     setAssessmentsLoading(true);
     try {
-      const data = await safeLoadFromApi('/assessments', getAssessments);
+      const data = await safeLoadFromApi('/assessments');
       setAssessmentsState(data);
       setAssessmentsError(null);
     } catch (err) {
@@ -263,7 +317,7 @@ const DataProvider = ({ children }) => {
   const refreshResults = useCallback(async () => {
     setResultsLoading(true);
     try {
-      const data = await safeLoadFromApi('/results', getResults);
+      const data = await safeLoadFromApi('/results');
       setResultsState(data);
       setResultsError(null);
     } catch (err) {
@@ -278,7 +332,7 @@ const DataProvider = ({ children }) => {
   const refreshAttendance = useCallback(async () => {
     setAttendanceLoading(true);
     try {
-      const data = await getAttendance();
+      const data = await safeLoadFromApi('/attendance');
       setAttendanceState(data);
       setAttendanceError(null);
     } catch (err) {
@@ -439,8 +493,16 @@ const DataProvider = ({ children }) => {
   const refreshAssessmentUnlocks = useCallback(async () => {
     setAssessmentUnlocksLoading(true);
     try {
-      const data = await getAssessmentUnlocks();
-      setAssessmentUnlocksState(data);
+      // Fetch authoritative access grants from backend
+      const grants = await apiRequest('/access-grants');
+      const map = {};
+      (Array.isArray(grants) ? grants : []).forEach(g => {
+        const aid = g.assessment_id || g.assessmentId || g.assessmentId;
+        if (!aid) return;
+        map[aid] = map[aid] || [];
+        map[aid].push(g);
+      });
+      setAssessmentUnlocksState(map);
     } catch (err) {
       console.error('Error fetching assessment unlocks:', err);
     } finally {
@@ -475,15 +537,21 @@ const DataProvider = ({ children }) => {
   // Assessment Live Sessions (admin/faculty opens an assessment to every student at once)
   const refreshAssessmentSessions = useCallback(async () => {
     try {
-      setAssessmentSessionsState(getAssessmentSessions());
+      const sessions = await getAssessmentSessions();
+      setAssessmentSessionsState(sessions);
     } catch (err) {
       console.error('Error fetching assessment sessions:', err);
     }
   }, []);
 
   const startAssessmentForAll = useCallback(async (assessmentId, options = {}) => {
-    const session = startAssessmentSession(assessmentId, { ...options, startedBy: user?.id || 'system' });
-    setAssessmentSessionsState(getAssessmentSessions());
+    const session = await startAssessmentSession(assessmentId, { ...options, startedBy: user?.id || 'system' });
+    try {
+      const sessions = await getAssessmentSessions();
+      setAssessmentSessionsState(sessions);
+    } catch (err) {
+      console.error('Failed to refresh sessions after start:', err);
+    }
     logAction({
       action: 'ASSESSMENT_SESSION_STARTED',
       userId: user?.id || 'system',
@@ -497,8 +565,13 @@ const DataProvider = ({ children }) => {
   }, [user]);
 
   const extendAssessmentForAll = useCallback(async (assessmentId, extraMinutes) => {
-    const session = extendAssessmentSession(assessmentId, extraMinutes);
-    setAssessmentSessionsState(getAssessmentSessions());
+    const session = await extendAssessmentSession(assessmentId, extraMinutes);
+    try {
+      const sessions = await getAssessmentSessions();
+      setAssessmentSessionsState(sessions);
+    } catch (err) {
+      console.error('Failed to refresh sessions after extend:', err);
+    }
     logAction({
       action: 'ASSESSMENT_SESSION_EXTENDED',
       userId: user?.id || 'system',
@@ -512,8 +585,13 @@ const DataProvider = ({ children }) => {
   }, [user]);
 
   const stopAssessmentForAll = useCallback(async (assessmentId) => {
-    const session = stopAssessmentSession(assessmentId);
-    setAssessmentSessionsState(getAssessmentSessions());
+    const session = await stopAssessmentSession(assessmentId);
+    try {
+      const sessions = await getAssessmentSessions();
+      setAssessmentSessionsState(sessions);
+    } catch (err) {
+      console.error('Failed to refresh sessions after stop:', err);
+    }
     logAction({
       action: 'ASSESSMENT_SESSION_STOPPED',
       userId: user?.id || 'system',
@@ -675,8 +753,9 @@ const DataProvider = ({ children }) => {
         // Check if assessment is for a course the student is enrolled in
         const isInCourse = filteredCourses.some(c => c.id === a.courseId);
 
-        // Check if assessment is unlocked for this student
-        const isUnlocked = isAssessmentUnlockedForStudent(a.id, user.id);
+        // Check if assessment is unlocked for this student using cached state
+        const grantsFor = assessmentUnlocks[a.id] || [];
+        const isUnlocked = grantsFor.some(g => (g.unlocked === 1 || g.unlocked === true || g.status === 'active' || g.status === 'open') && !(g.expires_at && new Date(g.expires_at) <= new Date() || g.expiresAt && new Date(g.expiresAt) <= new Date()));
 
         // Check if assessment is not expired
         const isNotExpired = !a.endDate || new Date(a.endDate) > new Date();
@@ -1229,7 +1308,7 @@ const DataProvider = ({ children }) => {
       // Submitting consumes a server-like access grant. This prevents a user
       // from bypassing the UI and creating unlimited local attempts.
       if (resultData.assessmentId && resultData.studentId) {
-        recordAssessmentAttempt(resultData.assessmentId, resultData.studentId);
+        await recordAssessmentAttempt(resultData.assessmentId, resultData.studentId);
         await refreshAssessmentUnlocks();
       }
       const newResult = await addResult({
@@ -1576,8 +1655,9 @@ const DataProvider = ({ children }) => {
       });
 
       // Create notification for admin/faculty
-      const adminUsers = getUsers().filter(u => u.role === ROLES.ADMIN);
-      const facultyUsers = getUsers().filter(u => u.role === ROLES.FACULTY);
+      const allUsers = await getUsers();
+      const adminUsers = allUsers.filter(u => u.role === ROLES.ADMIN);
+      const facultyUsers = allUsers.filter(u => u.role === ROLES.FACULTY);
 
       const notificationPromises = [...adminUsers, ...facultyUsers].map(admin => {
         return addNotification({
@@ -1896,8 +1976,8 @@ const DataProvider = ({ children }) => {
   // Settings functions
   const updateSettings = useCallback(async (updates) => {
     try {
-      const currentSettings = getSettings();
-      const updatedSettings = await updateSettings(updates);
+      const currentSettings = await getSettings();
+      const updatedSettings = await persistSettings(updates);
       setSettingsState(updatedSettings);
 
       // Log action
@@ -1920,7 +2000,7 @@ const DataProvider = ({ children }) => {
   // Theme functions
   const setTheme = useCallback(async (newTheme) => {
     try {
-      await setTheme(newTheme);
+      await saveTheme(newTheme);
       setThemeState(newTheme);
 
       // Log action
@@ -1967,7 +2047,7 @@ const DataProvider = ({ children }) => {
   // Backup functions
   const createBackup = useCallback(async (options = {}) => {
     try {
-      const backup = await createBackup({
+      const backup = await createBackupRecord({
         createdBy: user?.id,
         ...options
       });
@@ -1992,7 +2072,7 @@ const DataProvider = ({ children }) => {
 
   const restoreBackup = useCallback(async (backup, verifyVersion = true) => {
     try {
-      const result = await restoreBackup(backup, verifyVersion);
+      const result = await restoreBackupData(backup, verifyVersion);
 
       // Log action
       logAction({
@@ -2040,21 +2120,21 @@ const DataProvider = ({ children }) => {
   ]);
 
   const downloadBackup = useCallback((backup) => {
-    downloadBackup(backup);
+    downloadBackupFile(backup);
   }, []);
 
   const importBackupFromFile = useCallback(async (file) => {
-    return await importBackupFromFile(file);
+    return await importBackupFile(file);
   }, []);
 
   // Student Progress functions
   const getStudentProgress = useCallback((studentId) => {
-    return getStudentProgress(studentId);
+    return readStudentProgress(studentId);
   }, []);
 
   const updateStudentProgress = useCallback(async (studentId, updates) => {
     try {
-      const updatedProgress = await updateStudentProgress(studentId, updates);
+      const updatedProgress = await saveStudentProgress(studentId, updates);
 
       // Log action if this is the current user
       if (studentId === user?.id) {
@@ -2253,8 +2333,8 @@ const DataProvider = ({ children }) => {
     getTheme,
     getPermissions,
     getAssessmentUnlocks,
-    getAssessmentAccessForStudent,
-    getStudentProgress: getStudentProgress
+    getCachedAssessmentAccessForStudent,
+    getStudentProgress
   }), [
     // State
     isLoading, error, users, courses, labs, assessments, results, attendance,
@@ -2301,6 +2381,10 @@ const DataProvider = ({ children }) => {
   ]);
 
   // ===== RENDER =====
+  if (!isAuthenticated || !user || isPublicRoute) {
+    return <>{children}</>;
+  }
+
   return (
     <DataContext.Provider value={value}>
       {children}

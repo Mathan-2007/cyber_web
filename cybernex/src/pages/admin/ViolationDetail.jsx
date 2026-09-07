@@ -9,6 +9,7 @@ import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { ArrowLeft, User, Calendar, Clock, AlertTriangle, ShieldAlert, FileText, Check, X, Eye, Edit2, Trash2, ExternalLink } from 'lucide-react';
+import { apiRequest } from '../../services/api';
 
 const ViolationDetail = () => {
   const navigate = useNavigate();
@@ -27,68 +28,32 @@ const ViolationDetail = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  // Mock data for violation - in a real app this would come from context/data
-  const mockViolations = {
-    'VIO-001': {
-      id: 'VIO-001',
-      userId: 'STUDENT-001',
-      type: 'TAB_SWITCH',
-      severity: 'MEDIUM',
-      description: 'User switched browser tabs during assessment',
-      assessmentId: 'ASSESSMENT-001',
-      assessmentTitle: 'Web Security Fundamentals',
-      timestamp: new Date('2024-03-15T14:30:00').toISOString(),
-      status: 'unresolved',
-      resolvedBy: null,
-      resolvedAt: null,
-      evidence: 'Browser API detected tab switch at 14:30:45. User switched to a tab with title "Google" for 45 seconds before returning to the assessment.',
-      actionTaken: null,
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      additionalData: {
-        duration: '45 seconds',
-        previousTab: 'Google',
-        timestamp: '2024-03-15T14:30:45.123Z'
-      }
-    },
-    'VIO-002': {
-      id: 'VIO-002',
-      userId: 'STUDENT-002',
-      type: 'COPY_ATTEMPT',
-      severity: 'HIGH',
-      description: 'User attempted to copy text from the assessment',
-      assessmentId: 'ASSESSMENT-002',
-      assessmentTitle: 'Network Security Assessment',
-      timestamp: new Date('2024-03-10T10:15:00').toISOString(),
-      status: 'resolved',
-      resolvedBy: 'FACULTY-001',
-      resolvedAt: new Date('2024-03-10T12:45:00').toISOString(),
-      evidence: 'Clipboard API detected copy operation. User attempted to copy the assessment question text.',
-      actionTaken: 'Warning issued to student via email',
-      ipAddress: '192.168.1.101',
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      additionalData: {
-        copiedText: 'What is the purpose of a firewall?',
-        timestamp: '2024-03-10T10:15:22.456Z'
-      }
-    }
-  };
-
   useEffect(() => {
-    if (violationId && mockViolations[violationId]) {
-      setViolation(mockViolations[violationId]);
-      
-      // Find related user
-      const user = allUsers.find(u => u.id === mockViolations[violationId].userId);
-      setRelatedUser(user);
-      
-      // In a real app, we would also fetch the related assessment
-      setRelatedAssessment({
-        id: mockViolations[violationId].assessmentId,
-        title: mockViolations[violationId].assessmentTitle,
-        domain: 'Network Security'
-      });
-    }
+    let mounted = true;
+
+    const loadViolation = async () => {
+      if (!violationId) return;
+      try {
+        const data = await apiRequest(`/violations/${violationId}`);
+        if (!mounted) return;
+        setViolation(data);
+
+        const user = allUsers.find(u => u.id === data.student_id || u.id === data.userId || u.id === data.user_id);
+        setRelatedUser(user || null);
+
+        setRelatedAssessment({
+          id: data.assessment_id || data.assessmentId,
+          title: data.assessment_title || data.assessmentTitle || '',
+          domain: data.domain || ''
+        });
+      } catch (err) {
+        console.error('Failed to load violation:', err.message);
+        setViolation(null);
+      }
+    };
+
+    loadViolation();
+    return () => { mounted = false; };
   }, [violationId, allUsers]);
 
   const handleGoBack = () => {
@@ -105,25 +70,22 @@ const ViolationDetail = () => {
     setError(null);
     
     try {
-      // In a real app, this would call a service to resolve the violation
-      console.log('Resolving violation with notes:', resolutionNotes, 'Action:', actionTaken);
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Update violation status
-      setViolation(prev => ({
-        ...prev,
+      const payload = {
         status: 'resolved',
-        resolvedBy: user?.id || 'current_user',
-        resolvedAt: new Date().toISOString(),
-        actionTaken: actionTaken || resolutionNotes
-      }));
-      
+        resolved_by: user?.id || 'system',
+        resolved_at: new Date().toISOString(),
+        action_taken: actionTaken || resolutionNotes,
+        note: resolutionNotes
+      };
+
+      await apiRequest(`/violations/${violation.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+
+      // refresh local state
+      const updated = { ...violation, status: 'resolved', resolvedBy: payload.resolved_by, resolvedAt: payload.resolved_at, actionTaken: payload.action_taken };
+      setViolation(updated);
       setSuccess(true);
       setResolutionNotes('');
       setActionTaken('');
-      
     } catch (err) {
       setError(err.message || 'Failed to resolve violation');
     } finally {
@@ -140,19 +102,9 @@ const ViolationDetail = () => {
     setError(null);
     
     try {
-      // In a real app, this would call a service to delete the violation
-      console.log('Deleting violation:', violationId);
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await apiRequest(`/violations/${violation.id}`, { method: 'DELETE' });
       setSuccess(true);
-      
-      // Navigate back after deletion
-      setTimeout(() => {
-        navigate('/admin/violations');
-      }, 1500);
-      
+      setTimeout(() => navigate('/admin/violations'), 800);
     } catch (err) {
       setError(err.message || 'Failed to delete violation');
     } finally {

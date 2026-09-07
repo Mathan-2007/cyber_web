@@ -1,4 +1,4 @@
-import { getQuestionSelectionFor, setQuestionSelectionFor, getGlobalAssessmentPolicy, getAssessmentSession, getAssessmentAccessForStudent } from '../services/storageService';
+import { getQuestionSelectionFor, setQuestionSelectionFor, getGlobalAssessmentPolicy, getCachedAssessmentSession, getCachedAssessmentAccessForStudent } from '../services/storageService';
 
 const normalizeQuestion = (question, index = 0) => {
   if (!question) return null;
@@ -31,8 +31,8 @@ export const getQuestionPool = (assessment) => {
 export const getEffectivePolicy = (assessment = {}, studentId = null) => {
   const globalPolicy = getGlobalAssessmentPolicy();
   const assessmentSettings = assessment.settings || {};
-  const session = assessment?.id ? getAssessmentSession(assessment.id) : null;
-  const accessGrant = studentId && assessment?.id ? getAssessmentAccessForStudent(assessment.id, studentId) : null;
+  const session = assessment?.id ? getCachedAssessmentSession(assessment.id) : null;
+  const accessGrant = studentId && assessment?.id ? getCachedAssessmentAccessForStudent(assessment.id, studentId) : null;
 
   const merged = {
     timeLimit: Number(globalPolicy.timeLimit ?? 60),

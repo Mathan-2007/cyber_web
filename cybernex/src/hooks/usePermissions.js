@@ -25,10 +25,11 @@ export const usePermissions = () => {
   // Get role's default permissions
   // Combine all permissions
   const allPermissions = useMemo(() => {
-    // A configured role matrix is authoritative. It allows Access Control to
-    // revoke default capabilities instead of merely adding more of them.
-    const configured = globalPermissions[role];
-    return configured || getAllPermissionsForUser(role, userPermissions);
+    // A configured role matrix is authoritative when it contains values. If the
+    // matrix is empty or not loaded yet, fall back to the default role permissions.
+    const configured = globalPermissions?.[role];
+    const hasConfiguredPermissions = Array.isArray(configured) && configured.length > 0;
+    return hasConfiguredPermissions ? configured : getAllPermissionsForUser(role, userPermissions);
   }, [role, userPermissions, globalPermissions]);
 
   /**

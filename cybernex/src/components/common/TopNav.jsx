@@ -132,13 +132,6 @@ const TopNav = ({ onMenuClick, isSidebarCollapsed }) => {
 
     const menuItems = [
       {
-        id: 'profile',
-        label: 'My Profile',
-        icon: User,
-        path: '/profile',
-        permissions: []
-      },
-      {
         id: 'settings',
         label: 'Settings',
         icon: Settings,

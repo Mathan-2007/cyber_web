@@ -35,101 +35,13 @@ const AuditLogs = () => {
     failed: 0
   });
 
-  // Mock data for audit logs if none exists
-  const mockAuditLogs = [
-    {
-      id: 'AUDIT-001',
-      userId: 'admin',
-      userName: 'Administrator',
-      role: ROLES.ADMIN,
-      action: 'USER_CREATED',
-      target: 'User',
-      targetId: 'STUDENT-001',
-      targetDetails: { name: 'John Doe', email: 'john@example.com' },
-      status: 'Success',
-      timestamp: new Date('2024-03-15T10:30:00').toISOString(),
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-      details: 'Created new student user account'
-    },
-    {
-      id: 'AUDIT-002',
-      userId: 'FACULTY-001',
-      userName: 'Professor Smith',
-      role: ROLES.FACULTY,
-      action: 'ASSESSMENT_STARTED',
-      target: 'Assessment',
-      targetId: 'ASSESSMENT-001',
-      targetDetails: { title: 'Web Security Fundamentals' },
-      status: 'Success',
-      timestamp: new Date('2024-03-15T09:15:00').toISOString(),
-      ipAddress: '192.168.1.101',
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-      details: 'Student started assessment attempt'
-    },
-    {
-      id: 'AUDIT-003',
-      userId: 'STUDENT-001',
-      userName: 'John Doe',
-      role: ROLES.STUDENT,
-      action: 'RESULT_SUBMITTED',
-      target: 'Result',
-      targetId: 'RESULT-001',
-      targetDetails: { assessment: 'Web Security Fundamentals', score: 85 },
-      status: 'Success',
-      timestamp: new Date('2024-03-15T11:45:00').toISOString(),
-      ipAddress: '192.168.1.102',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-      details: 'Student submitted assessment with score of 85%'
-    },
-    {
-      id: 'AUDIT-004',
-      userId: 'admin',
-      userName: 'Administrator',
-      role: ROLES.ADMIN,
-      action: 'BACKUP_CREATED',
-      target: 'Backup',
-      targetId: 'BACKUP-20240314',
-      targetDetails: { name: 'Manual Backup', type: 'manual' },
-      status: 'Success',
-      timestamp: new Date('2024-03-14T14:00:00').toISOString(),
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-      details: 'Created manual backup of all data'
-    },
-    {
-      id: 'AUDIT-005',
-      userId: 'FACULTY-002',
-      userName: 'Dr. Johnson',
-      role: ROLES.FACULTY,
-      action: 'RESTRICTION_APPLIED',
-      target: 'Restriction',
-      targetId: 'RESTRICTION-001',
-      targetDetails: { userId: 'STUDENT-002', type: 'ASSESSMENT_DISABLED' },
-      status: 'Success',
-      timestamp: new Date('2024-03-10T16:20:00').toISOString(),
-      ipAddress: '192.168.1.103',
-      userAgent: 'Mozilla/5.0 (Linux; x86_64)',
-      details: 'Applied assessment restriction to student for violation'
-    },
-    {
-      id: 'AUDIT-006',
-      userId: 'STUDENT-003',
-      userName: 'Jane Smith',
-      role: ROLES.STUDENT,
-      action: 'LOGIN_FAILED',
-      target: 'Authentication',
-      targetId: null,
-      targetDetails: { attempts: 3, reason: 'Incorrect password' },
-      status: 'Failed',
-      timestamp: new Date('2024-03-08T08:45:00').toISOString(),
-      ipAddress: '192.168.1.104',
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)',
-      details: 'Failed login attempt due to incorrect password'
-    }
-  ];
+  const safeDateKey = (value) => {
+    const raw = value ?? '';
+    const iso = new Date(raw).toISOString ? new Date(raw).toISOString() : String(raw);
+    return iso.split('T')[0] || '';
+  };
 
-  const displayLogs = auditLogs.length > 0 ? auditLogs : mockAuditLogs;
+  const displayLogs = Array.isArray(auditLogs) && auditLogs.length > 0 ? auditLogs : [];
 
   useEffect(() => {
     if (displayLogs.length > 0) {
@@ -137,14 +49,14 @@ const AuditLogs = () => {
       
       // Count today's logs
       const today = new Date().toISOString().split('T')[0];
-      const todayLogs = displayLogs.filter(log => log.timestamp.split('T')[0] === today);
+      const todayLogs = displayLogs.filter(log => safeDateKey(log?.timestamp) === today);
       
       // Count this week's logs
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       const weekAgoStr = weekAgo.toISOString().split('T')[0];
       const weekLogs = displayLogs.filter(log => {
-        const logDate = log.timestamp.split('T')[0];
+        const logDate = safeDateKey(log?.timestamp);
         return logDate >= weekAgoStr && logDate <= today;
       });
       
@@ -153,12 +65,12 @@ const AuditLogs = () => {
       monthAgo.setMonth(monthAgo.getMonth() - 1);
       const monthAgoStr = monthAgo.toISOString().split('T')[0];
       const monthLogs = displayLogs.filter(log => {
-        const logDate = log.timestamp.split('T')[0];
+        const logDate = safeDateKey(log?.timestamp);
         return logDate >= monthAgoStr && logDate <= today;
       });
       
-      const successful = displayLogs.filter(log => log.status === 'Success').length;
-      const failed = displayLogs.filter(log => log.status === 'Failed').length;
+      const successful = displayLogs.filter(log => String(log?.status || '').toLowerCase() === 'success').length;
+      const failed = displayLogs.filter(log => String(log?.status || '').toLowerCase() === 'failed').length;
       
       setStats({
         total: displayLogs.length,
@@ -216,15 +128,15 @@ const AuditLogs = () => {
       const monthAgoStr = monthAgo.toISOString().split('T')[0];
       
       if (filterDate === 'today') {
-        filtered = filtered.filter(log => log.timestamp.split('T')[0] === today);
+        filtered = filtered.filter(log => safeDateKey(log?.timestamp) === today);
       } else if (filterDate === 'this_week') {
         filtered = filtered.filter(log => {
-          const logDate = log.timestamp.split('T')[0];
+          const logDate = safeDateKey(log?.timestamp);
           return logDate >= weekAgoStr && logDate <= today;
         });
       } else if (filterDate === 'this_month') {
         filtered = filtered.filter(log => {
-          const logDate = log.timestamp.split('T')[0];
+          const logDate = safeDateKey(log?.timestamp);
           return logDate >= monthAgoStr && logDate <= today;
         });
       }

@@ -20,17 +20,17 @@ const RoleBadge = ({ role, size = 'sm', className = '' }) => {
     [ROLES.ADMIN]: {
       label: 'Admin',
       variant: 'danger',
-      icon: '👑'
+      icon: ''
     },
     [ROLES.FACULTY]: {
       label: 'Faculty',
       variant: 'primary',
-      icon: '👨‍🏫'
+      icon: ''
     },
     [ROLES.STUDENT]: {
       label: 'Student',
       variant: 'success',
-      icon: '👩‍🎓'
+      icon: ''
     }
   };
 

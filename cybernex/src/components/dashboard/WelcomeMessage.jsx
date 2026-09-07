@@ -49,11 +49,6 @@ const WelcomeMessage = ({
               user.role === 'faculty' ? '/faculty/dashboard' :
               '/student/dashboard',
         icon: LayoutDashboard
-      },
-      {
-        label: 'My Profile',
-        path: '/profile',
-        icon: User
       }
     ];
   };

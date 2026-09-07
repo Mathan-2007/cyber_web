@@ -35,71 +35,7 @@ const Violations = () => {
     unresolved: 0
   });
 
-  // Mock data for violations if none exists
-  const mockViolations = [
-    {
-      id: 'VIO-001',
-      userId: 'STUDENT-001',
-      type: 'TAB_SWITCH',
-      severity: 'MEDIUM',
-      description: 'User switched browser tabs during assessment',
-      assessmentId: 'ASSESSMENT-001',
-      assessmentTitle: 'Web Security Fundamentals',
-      timestamp: new Date('2024-03-15T14:30:00').toISOString(),
-      status: 'unresolved',
-      resolvedBy: null,
-      resolvedAt: null,
-      evidence: 'Browser API detected tab switch',
-      actionTaken: null
-    },
-    {
-      id: 'VIO-002',
-      userId: 'STUDENT-002',
-      type: 'COPY_ATTEMPT',
-      severity: 'HIGH',
-      description: 'User attempted to copy text from the assessment',
-      assessmentId: 'ASSESSMENT-002',
-      assessmentTitle: 'Network Security Assessment',
-      timestamp: new Date('2024-03-10T10:15:00').toISOString(),
-      status: 'resolved',
-      resolvedBy: 'FACULTY-001',
-      resolvedAt: new Date('2024-03-10T12:45:00').toISOString(),
-      evidence: 'Clipboard API detected copy operation',
-      actionTaken: 'Warning issued'
-    },
-    {
-      id: 'VIO-003',
-      userId: 'STUDENT-003',
-      type: 'WINDOW_BLUR',
-      severity: 'LOW',
-      description: 'User switched away from assessment window',
-      assessmentId: 'ASSESSMENT-003',
-      assessmentTitle: 'Linux Security Lab',
-      timestamp: new Date('2024-02-28T16:20:00').toISOString(),
-      status: 'unresolved',
-      resolvedBy: null,
-      resolvedAt: null,
-      evidence: 'Window blur event detected',
-      actionTaken: null
-    },
-    {
-      id: 'VIO-004',
-      userId: 'STUDENT-001',
-      type: 'MULTIPLE_LOGIN',
-      severity: 'CRITICAL',
-      description: 'Multiple login attempts from different locations',
-      assessmentId: null,
-      assessmentTitle: null,
-      timestamp: new Date('2024-03-01T09:00:00').toISOString(),
-      status: 'unresolved',
-      resolvedBy: null,
-      resolvedAt: null,
-      evidence: 'Simultaneous sessions detected',
-      actionTaken: null
-    }
-  ];
-
-  const displayViolations = violations.length > 0 ? violations : mockViolations;
+  const displayViolations = Array.isArray(violations) && violations.length > 0 ? violations : [];
 
   useEffect(() => {
     if (displayViolations.length > 0) {

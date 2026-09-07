@@ -289,13 +289,6 @@ export const RESOURCE_PROVIDERS = [
   { id: 'documentation', name: 'Official Documentation', url: '' },
 ];
 
-// ===== DEFAULT PASSWORDS (for demo only) =====
-export const DEMO_CREDENTIALS = {
-  [ROLES.ADMIN]: { email: 'admin@gmail.com', password: 'admin123' },
-  [ROLES.FACULTY]: { email: 'faculty@gmail.com', password: 'faculty123' },
-  [ROLES.STUDENT]: { email: 'student@gmail.com', password: 'student123' },
-};
-
 // ===== API ENDPOINTS (for future backend integration) =====
 export const API_ENDPOINTS = {
   AUTH: {
@@ -2294,7 +2287,6 @@ export default {
   LEVEL_PROGRESSION,
   LAB_CATEGORIES,
   RESOURCE_PROVIDERS,
-  DEMO_CREDENTIALS,
   API_ENDPOINTS,
   TIME_FORMATS,
   FILE_TYPES,
@@ -2306,20 +2298,6 @@ export default {
   LAB_DIFFICULTY,
   ASSESSMENT_DEFAULTS,
   TERMINAL_COMMANDS,
-  SAMPLE_LABS,
-  SAMPLE_ASSESSMENTS,
-  SAMPLE_COURSES,
-  SAMPLE_USERS,
-  SAMPLE_FACULTY,
-  SAMPLE_STUDENT_GROUPS,
-  SAMPLE_ATTENDANCE,
-  SAMPLE_SCHEDULES,
-  SAMPLE_VIOLATIONS,
-  SAMPLE_NOTIFICATIONS,
-  SAMPLE_AUDIT_LOGS,
-  SAMPLE_BACKUPS,
-  SAMPLE_RESULTS,
-  SAMPLE_RESTRICTIONS,
   VALIDATION_PATTERNS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,

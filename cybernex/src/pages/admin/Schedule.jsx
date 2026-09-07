@@ -38,44 +38,53 @@ const Schedule = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
+  const safeText = (value) => String(value ?? '');
+
   // Filter schedule data
   const getFilteredSchedules = () => {
-    let schedules = [...filteredSchedules];
+    let schedules = [...(filteredSchedules || [])];
     
     // Filter by search query
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
-      schedules = schedules.filter(s => 
-        s.courseId.toLowerCase().includes(lowerQuery) ||
-        s.courseTitle?.toLowerCase().includes(lowerQuery) ||
-        s.instructorId.toLowerCase().includes(lowerQuery) ||
-        s.instructorName?.toLowerCase().includes(lowerQuery) ||
-        s.day.toLowerCase().includes(lowerQuery) ||
-        s.time.toLowerCase().includes(lowerQuery)
-      );
+      schedules = schedules.filter(s => {
+        const courseId = safeText(s.courseId).toLowerCase();
+        const courseTitle = safeText(s.courseTitle).toLowerCase();
+        const instructorId = safeText(s.instructorId).toLowerCase();
+        const instructorName = safeText(s.instructorName).toLowerCase();
+        const day = safeText(s.day).toLowerCase();
+        const time = safeText(s.time).toLowerCase();
+
+        return courseId.includes(lowerQuery) ||
+          courseTitle.includes(lowerQuery) ||
+          instructorId.includes(lowerQuery) ||
+          instructorName.includes(lowerQuery) ||
+          day.includes(lowerQuery) ||
+          time.includes(lowerQuery);
+      });
     }
 
     // Filter by course
     if (selectedCourse !== 'all') {
-      schedules = schedules.filter(s => s.courseId === selectedCourse);
+      schedules = schedules.filter(s => safeText(s.courseId) === selectedCourse);
     }
 
     // Filter by instructor
     if (selectedInstructor !== 'all') {
-      schedules = schedules.filter(s => s.instructorId === selectedInstructor);
+      schedules = schedules.filter(s => safeText(s.instructorId) === selectedInstructor);
     }
 
     // Filter by day
     if (selectedDay !== 'all') {
-      schedules = schedules.filter(s => s.day === selectedDay);
+      schedules = schedules.filter(s => safeText(s.day) === selectedDay);
     }
 
     // Sort by day then time
     const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     schedules.sort((a, b) => {
-      const dayCompare = dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day);
+      const dayCompare = dayOrder.indexOf(safeText(a.day)) - dayOrder.indexOf(safeText(b.day));
       if (dayCompare !== 0) return dayCompare;
-      return a.time.localeCompare(b.time);
+      return safeText(a.time).localeCompare(safeText(b.time));
     });
 
     return schedules;
@@ -83,13 +92,13 @@ const Schedule = () => {
 
   const filteredSchedulesList = getFilteredSchedules();
   const totalPages = Math.ceil(filteredSchedulesList.length / itemsPerPage);
-  const currentSchedules = filteredSchedules.slice(
+  const currentSchedules = filteredSchedulesList.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
   // Get unique courses, instructors, and days for filters
-  const facultyUsers = filteredUsers.filter(u => u.role === 'FACULTY');
+  const facultyUsers = (filteredUsers || []).filter(u => String(u.role).toUpperCase() === 'FACULTY');
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   // Calculate statistics

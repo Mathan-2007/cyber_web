@@ -45,8 +45,99 @@ a:hover {
   text-decoration: none;
 }
 
-button, input, select, textarea {
+/* =========================================
+   CyberNex Form Controls
+   Consistent, comfortable input sizing
+   ========================================= */
+
+button,
+input,
+select,
+textarea {
   font-family: inherit;
+}
+
+/* Text inputs, selects and textareas */
+/* =========================================
+   CyberNex Form Controls
+   ========================================= */
+
+:where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"])
+),
+select,
+textarea {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 14px;
+
+  font-size: 14px;
+  line-height: 1.4;
+
+  border-radius: 8px;
+  box-sizing: border-box;
+}/* =========================================================
+   ADMIN FILTERS - FORCE HORIZONTAL ALIGNMENT
+   ========================================================= */
+
+.flex.flex-wrap.gap-2:has(> .select-sm) {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 12px !important;
+  width: 100% !important;
+}
+
+/* SearchBar wrapper */
+.flex.flex-wrap.gap-2:has(> .select-sm) > :first-child {
+  width: 220px !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+  flex: 0 0 220px !important;
+}
+
+/* Role / Status selects */
+.flex.flex-wrap.gap-2:has(> .select-sm) > .select-sm {
+  width: 180px !important;
+  min-width: 180px !important;
+  max-width: 180px !important;
+  flex: 0 0 180px !important;
+  margin: 0 !important;
+}
+
+select {
+  min-height: 46px;
+  padding: 0 40px 0 14px;
+  cursor: pointer;
+}
+
+textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+/* Dropdowns */
+select {
+  min-height: 46px;
+  padding: 0 40px 0 14px;
+  cursor: pointer;
+}
+
+/* Textarea */
+textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+/* Disabled controls */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 button:disabled, input:disabled, select:disabled, textarea:disabled {
@@ -88,4 +179,55 @@ code, kbd, pre, samp {
   .no-print, nav, aside, header {
     display: none !important;
   }
+}
+/* User List header */
+.flex.flex-wrap.justify-between.items-center.gap-4.mb-4 {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 20px !important;
+}
+
+/* User List */
+.flex.flex-wrap.justify-between.items-center.gap-4.mb-4 > h3 {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: max-content !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+}
+
+/* Right-side filter group */
+.flex.flex-wrap.justify-between.items-center.gap-4.mb-4 > div {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 12px !important;
+  width: auto !important;
+  margin-left: auto !important;
+  flex: 0 0 auto !important;
+}
+
+/* Search */
+.flex.flex-wrap.justify-between.items-center.gap-4.mb-4
+> div
+> :first-child {
+  width: 220px !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+  flex: 0 0 220px !important;
+}
+
+/* Dropdowns */
+.flex.flex-wrap.justify-between.items-center.gap-4.mb-4
+> div
+> select {
+  width: 180px !important;
+  min-width: 180px !important;
+  max-width: 180px !important;
+  flex: 0 0 180px !important;
 }

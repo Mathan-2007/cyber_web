@@ -24,7 +24,7 @@ const Pagination = ({
   const { isDarkMode } = useTheme();
 
   // Generate page numbers to display
-  const getPageNumbers = useMemo(() => {
+  const pageNumbers = useMemo(() => {
     const pages = [];
     const half = Math.floor(maxVisiblePages / 2);
     let start = Math.max(1, currentPage - half);
@@ -94,7 +94,7 @@ const Pagination = ({
         </Button>
 
         {/* Page buttons */}
-        {getPageNumbers().map((page, index) => {
+        {pageNumbers.map((page, index) => {
           if (page === '...') {
             return (
               <Button
